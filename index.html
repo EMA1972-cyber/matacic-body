@@ -1,0 +1,1225 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="color-scheme" content="only light">
+<title>Körper-Tracking</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f4f6f9;
+    --surface: #13131a;
+    --surface2: #1c1c26;
+    --border: #2a2a38;
+    --accent: #60f0a0;
+    --accent2: #1a7fc4;
+    --danger: #d63b3b;
+    --warn: #d4880a;
+    --text: #e8e8f0;
+    --muted: #6a6a80;
+    --start: #7c3aed;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html { background: #f4f6f9 !important; }
+
+  body {
+    background: #f4f6f9 !important;
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    min-height: 100vh;
+    padding: 24px 16px 80px;
+  }
+
+  header {
+    text-align: center;
+    margin-bottom: 32px;
+    padding-top: 8px;
+  }
+
+  header h1 {
+    font-family: 'DM Serif Display', serif;
+    font-size: 2rem;
+    font-weight: 400;
+    letter-spacing: -0.02em;
+    color: #1a56db;
+  }
+
+  header p {
+    color: var(--muted);
+    font-size: 0.7rem;
+    margin-top: 4px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  /* CURRENT SNAPSHOT */
+  .snapshot {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+
+  .snapshot-label {
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: #e8a020;
+    margin-bottom: 12px;
+    text-align: center;
+  }
+
+  .snap-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 8px;
+    align-items: start;
+  }
+  .snap-col { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 4px; }
+  .snap-col-center { justify-content: center; }
+  .snap-val { font-size: 1.4rem; font-weight: 500; line-height: 1; color: var(--text); }
+  .snap-unit { font-size: 0.58rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); margin-top: 2px; }
+  .snap-lbl { font-size: 0.58rem; color: var(--muted); margin-bottom: 4px; margin-top: 0; text-align: center; }
+  .snap-row { margin-bottom: 6px; text-align: center; }
+
+  .metric {
+    text-align: center;
+  }
+
+  .metric-val {
+    font-size: 1.4rem;
+    font-weight: 500;
+    color: var(--accent);
+    line-height: 1;
+  }
+
+  .metric-val.fat { color: var(--warn); }
+  .metric-val.abs { color: var(--accent2); }
+
+  .metric-unit {
+    font-size: 0.6rem;
+    color: var(--muted);
+    margin-top: 2px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+
+  .metric-lbl {
+    font-size: 0.6rem;
+    color: var(--muted);
+    margin-top: 4px;
+  }
+
+  /* DELTA SECTION */
+  .two-blocks {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+
+  .summary-block {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 16px 20px;
+  }
+
+  .summary-label {
+    font-size: 0.65rem;
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    color: #e8a020;
+    margin-bottom: 14px;
+    text-align: center;
+  }
+
+  .summary-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 8px;
+    text-align: center;
+  }
+
+  .minmax-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 8px;
+    text-align: center;
+    margin-bottom: 14px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .minmax-item { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+  .minmax-label {
+    font-size: 0.58rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+  }
+  .minmax-val {
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: var(--text);
+  }
+  .minmax-val.minmax-red   { color: #d63b3b; }
+  .minmax-val.minmax-blue  { color: #1a7fc4; }
+  .minmax-val.minmax-green { color: #60f0a0; }
+  .summary-grid.two-col {
+    grid-template-columns: 1fr 1fr;
+    max-width: 280px;
+    margin: 0 auto;
+  }
+
+  .summary-item { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+  .summary-item-full { grid-column: span 3; margin-top: 8px; padding-top: 10px; border-top: 1px solid var(--border); }
+
+  .summary-sub {
+    font-size: 0.58rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    margin-bottom: 2px;
+  }
+
+  .summary-unit {
+    font-size: 0.58rem;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+
+  .delta-val {
+    font-size: 1.1rem;
+    font-weight: 500;
+    margin-bottom: 2px;
+  }
+
+  .delta-val.good { color: #60f0a0; }
+  .delta-val.bad  { color: #d63b3b; }
+  .delta-val.neutral { color: #1a7fc4; }
+
+  .delta-sub {
+    font-size: 0.6rem;
+    color: var(--muted);
+  }
+
+  /* PROGRESS BAR */
+  .progress-wrap {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+
+  .progress-label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.65rem;
+    color: var(--muted);
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+
+  .pb-range {
+    color: var(--muted);
+    font-size: 0.55rem;
+    margin-left: 6px;
+    opacity: 0.7;
+  }
+
+  .progress-bar-bg {
+    background: var(--surface2);
+    border-radius: 99px;
+    height: 8px;
+    margin-bottom: 16px;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .progress-bar-fill {
+    height: 100%;
+    border-radius: 99px;
+    transition: width 0.6s cubic-bezier(.4,0,.2,1);
+  }
+
+  .bar-weight { background: linear-gradient(90deg, var(--start), var(--accent)); }
+  .bar-fat    { background: linear-gradient(90deg, var(--start), var(--warn)); }
+  .bar-absfat { background: linear-gradient(90deg, var(--start), var(--accent2)); }
+  .bar-lean   { background: linear-gradient(90deg, var(--start), #5bc8f5); }
+
+  /* TABLE */
+  .table-wrap {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+    margin-bottom: 16px;
+  }
+
+  .table-scroll {
+    max-height: 260px;
+    overflow: hidden;
+    transition: max-height 0.3s ease;
+  }
+
+  .table-scroll.expanded {
+    max-height: 60vh;
+    overflow-y: auto;
+  }
+
+  .table-header {
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .table-header:active {
+    opacity: 0.8;
+  }
+
+  .toggle-hint {
+    font-size: 0.55rem;
+    color: var(--muted);
+    display: block;
+    margin-top: 2px;
+    letter-spacing: 0.08em;
+    text-align: center;
+    width: 100%;
+  }
+
+  .table-header {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .table-header span {
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: #e8a020;
+    font-weight: 400;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.72rem;
+  }
+
+  thead th {
+    text-align: center;
+    padding: 8px 12px;
+    text-align: left;
+    font-size: 0.6rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+    font-weight: 400;
+  }
+
+  thead th:last-child { text-align: center; }
+
+  tbody tr {
+    border-bottom: 1px solid var(--border);
+    transition: background 0.15s;
+  }
+
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:hover { background: var(--surface2); }
+  tbody tr.start-row td { color: var(--start); }
+
+  td {
+    text-align: center;
+    padding: 9px 12px;
+    color: var(--text);
+  }
+
+  td.date-cell {
+    cursor: pointer;
+    color: var(--muted);
+    font-size: 0.7rem;
+    transition: color 0.15s;
+  }
+
+  td.date-cell:hover, td.date-cell:active {
+    color: #f06060;
+  }
+
+  td.good { color: #60f0a0; }
+  td.bad  { color: var(--danger); }
+  td.same { color: var(--accent2); }
+  td.lean-val  { color: #1a7fc4; }
+  td.lean-good { color: #60f0a0; }
+  td.lean-bad  { color: #d63b3b; }
+  td.lean-same { color: var(--accent2); }
+  .metric-val.lean { color: #1a7fc4; }
+  td.lean-val { color: #1a7fc4; }
+
+  .del-btn {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    border-radius: 6px;
+    padding: 3px 8px;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.6rem;
+    cursor: pointer;
+    transition: all 0.15s;
+    display: block;
+    margin: 0 auto;
+  }
+
+  .del-btn:hover {
+    border-color: var(--danger);
+    color: var(--danger);
+  }
+
+  /* ADD BUTTON */
+  .add-wrap {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+
+  .add-wrap h3 {
+    font-size: 0.65rem;
+    font-weight: 400;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    text-align: center;
+    margin-bottom: 14px;
+    color: #e8a020;
+  }
+
+  .input-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+
+  .input-group label {
+    display: block;
+    font-size: 0.6rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    margin-bottom: 4px;
+  }
+
+  .input-group input {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 10px;
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    font-size: 0.8rem;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+
+  .input-group input:focus { border-color: var(--accent); }
+
+  .add-btn {
+    width: 100%;
+    background: var(--accent);
+    color: #0a0a0f;
+    border: none;
+    border-radius: 10px;
+    padding: 11px;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.75rem;
+    font-weight: 500;
+    cursor: pointer;
+    letter-spacing: 0.08em;
+    transition: opacity 0.15s;
+  }
+
+  .add-btn:hover { opacity: 0.85; }
+
+  /* CHARTS */
+  .chart-wrap {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+
+  .chart-title {
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: #e8a020;
+    margin-bottom: 14px;
+    text-align: center;
+  }
+
+  .chart-tabs {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 16px;
+  }
+
+  .chart-tab {
+    flex: 1;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 6px 4px;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.6rem;
+    color: var(--muted);
+    cursor: pointer;
+    text-align: center;
+    letter-spacing: 0.06em;
+    transition: all 0.15s;
+  }
+
+  .chart-tab.active-w { border-color: #c8f060; color: #c8f060; }
+  .chart-tab.active-f { border-color: var(--warn); color: var(--warn); }
+  .chart-tab.active-a { border-color: #60c8f0; color: #60c8f0; }
+  .chart-tab.active-l { border-color: #1a7fc4; color: #1a7fc4; }
+
+  canvas {
+    width: 100% !important;
+    height: 180px !important;
+    display: block;
+    cursor: crosshair;
+  }
+
+  .chart-tooltip {
+    position: absolute;
+    background: #1c1c26;
+    border: 1px solid #2a2a38;
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 0.7rem;
+    color: #e8e8f0;
+    pointer-events: none;
+    display: none;
+    white-space: nowrap;
+    z-index: 10;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+    width: 110px;
+    text-align: center;
+  }
+
+  .chart-tooltip .tt-date { color: #6a6a80; font-size: 0.62rem; margin-bottom: 2px; }
+  .chart-tooltip .tt-val  { font-size: 0.85rem; font-weight: 500; }
+
+  .chart-wrap { position: relative; }
+
+  /* SHORTCUT HINT */
+  .hint {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent2);
+    border-radius: 12px;
+    padding: 14px 16px;
+    font-size: 0.68rem;
+    color: var(--muted);
+    line-height: 1.6;
+  }
+
+  .hint strong { color: var(--accent2); }
+
+  .tag {
+    display: inline-block;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-size: 0.6rem;
+    color: var(--accent2);
+    margin-left: 4px;
+  }
+
+  /* MOBILE OPTIMIZATION */
+  @media (max-width: 430px) {
+    body { padding: 16px 12px 60px; }
+    header h1 { font-size: 1.6rem; }
+    .metrics-grid { gap: 8px; }
+    .metric-val { font-size: 1.2rem; }
+
+    .delta-val { font-size: 1rem; }
+    .input-row { grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+    .input-group input { padding: 10px 8px; font-size: 0.9rem; }
+    .add-btn { padding: 13px; font-size: 0.8rem; }
+    table { font-size: 0.78rem; }
+    thead th {
+    text-align: center; padding: 8px 8px; font-size: 0.58rem; }
+    td {
+    text-align: center; padding: 10px 8px; }
+    .del-btn { padding: 5px 10px; font-size: 0.65rem; }
+    canvas { height: 200px !important; }
+    .chart-tab { font-size: 0.65rem; padding: 8px 4px; }
+    .snapshot { padding: 16px; }
+    .summary-block { padding: 12px 14px; }
+    .progress-wrap { padding: 16px; }
+    .chart-wrap { padding: 16px; }
+    .add-wrap { padding: 16px; }
+    .hint { font-size: 0.7rem; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Body Tracking</h1>
+  <p>Ziel: 80 kg · 10% · 8,0 kg Fett</p>
+</header>
+
+<!-- SNAPSHOT -->
+<div class="snapshot">
+  <div class="snapshot-label">Letzte Messung</div>
+  <div class="snap-grid">
+    <!-- Col 1: Gewicht -->
+    <div class="snap-col snap-col-center">
+      <div class="snap-lbl">Gewicht</div>
+      <div class="snap-val" id="cur-weight">—</div>
+      <div class="snap-unit">KG</div>
+    </div>
+    <!-- Col 2: Fett -->
+    <div class="snap-col">
+      <div class="snap-lbl">Körperfett</div>
+      <div class="snap-row">
+        <div class="snap-val" id="cur-absfat">—</div>
+        <div class="snap-unit">KG</div>
+      </div>
+      <div class="snap-row">
+        <div class="snap-val" id="cur-fat">—</div>
+        <div class="snap-unit">%</div>
+      </div>
+    </div>
+    <!-- Col 3: Mager -->
+    <div class="snap-col">
+      <div class="snap-lbl">Magere Masse</div>
+      <div class="snap-row">
+        <div class="snap-val" id="cur-lean">—</div>
+        <div class="snap-unit">KG</div>
+      </div>
+      <div class="snap-row">
+        <div class="snap-val" id="cur-leanpct">—</div>
+        <div class="snap-unit">%</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- DELTAS -->
+<div class="two-blocks">
+
+  <!-- Block: SEIT START -->
+  <div class="summary-block">
+    <div class="summary-label">SEIT START</div>
+    <div class="minmax-row">
+      <div class="minmax-item">
+        <div class="minmax-label">Max</div>
+        <div class="minmax-val minmax-red" id="w-max">—</div>
+      </div>
+      <div class="minmax-item">
+        <div class="minmax-label">Avg</div>
+        <div class="minmax-val minmax-blue" id="w-avg">—</div>
+      </div>
+      <div class="minmax-item">
+        <div class="minmax-label">Min</div>
+        <div class="minmax-val minmax-green" id="w-min">—</div>
+      </div>
+    </div>
+    <div class="summary-grid">
+      <div class="summary-item">
+        <div class="summary-sub">Gewicht</div>
+        <div class="delta-val neutral" id="d-weight-start">—</div>
+        <div class="summary-unit">KG</div>
+      </div>
+      <div class="summary-item">
+        <div class="summary-sub">Fett</div>
+        <div class="delta-val neutral" id="d-absfat-start">—</div>
+        <div class="summary-unit">KG</div>
+      </div>
+      <div class="summary-item">
+        <div class="summary-sub">Magere Masse</div>
+        <div class="delta-val good" id="d-lean-start">—</div>
+        <div class="summary-unit">KG</div>
+      </div>
+      <div class="summary-item summary-item-full">
+        <div class="summary-sub">Fettreduktion</div>
+        <div class="delta-val good" id="d-fat-pct">—</div>
+        <div class="summary-unit">%</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Block: BIS ZIEL -->
+  <div class="summary-block">
+    <div class="summary-label">BIS ZIEL</div>
+    <div class="summary-grid two-col">
+      <div class="summary-item">
+        <div class="summary-sub">Gewicht</div>
+        <div class="delta-val" id="d-weight-goal">—</div>
+        <div class="summary-unit">KG</div>
+      </div>
+      <div class="summary-item">
+        <div class="summary-sub">Fett</div>
+        <div class="delta-val" id="d-absfat-goal">—</div>
+        <div class="summary-unit">KG</div>
+      </div>
+    </div>
+    <div style="margin-top:16px; padding-top:14px; border-top:1px solid var(--border);">
+      <div class="progress-label"><span>Gewicht <span class="pb-range">96,81 → 80 kg</span></span><span id="pb-w-lbl">—</span></div>
+      <div class="progress-bar-bg"><div class="progress-bar-fill bar-weight" id="pb-weight" style="width:0%"></div></div>
+      <div class="progress-label" style="margin-top:10px"><span>Fett KG <span class="pb-range">20,33 → 8 kg</span></span><span id="pb-a-lbl">—</span></div>
+      <div class="progress-bar-bg" style="margin-bottom:0"><div class="progress-bar-fill bar-absfat" id="pb-absfat" style="width:0%"></div></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- CHARTS -->
+<div class="chart-wrap">
+  <div class="chart-title">Verlauf</div>
+  <div class="chart-tabs">
+    <div class="chart-tab active-w" onclick="setChart('w')">Gewicht</div>
+    <div class="chart-tab" onclick="setChart('a')">Fett</div>
+  </div>
+  <div id="chartToggleHint" onclick="toggleChartExpand()" style="text-align:center; font-size:0.55rem; font-family:'DM Mono',monospace; letter-spacing:0.1em; text-transform:uppercase; color:var(--muted); margin-bottom:8px; cursor:pointer; user-select:none;">▼ Alle anzeigen</div>
+  <canvas id="myChart"></canvas>
+  <div class="chart-tooltip" id="chartTooltip"><div class="tt-date" id="tt-date"></div><div class="tt-val" id="tt-val"></div></div>
+</div>
+
+<!-- TABLE -->
+<div class="table-wrap">
+  <div class="table-header" onclick="toggleTable()">
+    <div style="text-align:center;">
+      <div style="font-size:0.65rem; text-transform:uppercase; letter-spacing:0.14em; color:#e8a020;">Alle Messungen</div>
+      <div id="toggle-hint" style="font-size:0.55rem; font-family:'DM Mono',monospace; color:var(--muted); margin-top:3px; letter-spacing:0.1em; text-align:center; text-transform:uppercase;">▼ Alle anzeigen</div>
+    </div>
+  </div>
+  <div class="table-scroll" id="tableScroll">
+  <table>
+    <thead>
+      <tr>
+        <th>Datum</th>
+        <th>KG</th>
+        <th>Fett KG</th>
+        <th>Fett %</th>
+        <th>Mager KG</th>
+        <th>Mager %</th>
+      </tr>
+    </thead>
+    <tbody id="table-body"></tbody>
+  </table>
+  </div>
+</div>
+
+<!-- MANUAL ADD -->
+<div class="add-wrap">
+  <h3>Messung manuell eintragen</h3>
+  <div class="input-row">
+    <div class="input-group">
+      <label>Datum</label>
+      <input type="date" id="in-date">
+    </div>
+    <div class="input-group">
+      <label>Gewicht kg</label>
+      <input type="number" id="in-weight" step="0.01" placeholder="96.86">
+    </div>
+    <div class="input-group">
+      <label>Fett %</label>
+      <input type="number" id="in-fat" step="0.1" placeholder="16.9">
+    </div>
+  </div>
+  <button class="add-btn" onclick="addEntry()">＋ Eintrag hinzufügen</button>
+</div>
+
+<script>
+  const GOAL = { weight: 80, fat: 10, absfat: 8 };
+  const START = { date: '2026-05-18', weight: 96.81, fat: 21, absfat: 0, lean: 0 };
+  START.absfat = parseFloat((START.weight * START.fat / 100).toFixed(2));
+  START.lean = parseFloat((START.weight - START.absfat).toFixed(2));
+
+  const STORAGE_KEY = 'koerper_tracking_v1';
+
+  // Seed data from Apple Health screenshots
+  const SEED = [
+    { date: '2026-05-25', weight: 96.86, fat: 16.9 },
+    { date: '2026-05-24', weight: 95.89, fat: 19.6 },
+    { date: '2026-05-23', weight: 96.64, fat: 17.8 },
+    { date: '2026-05-22', weight: 97.4,  fat: 19.0 },
+    { date: '2026-05-21', weight: 97.5,  fat: 18.3 },
+    { date: '2026-05-20', weight: 97.36, fat: 19.5 },
+    { date: '2026-05-19', weight: 96.73, fat: 19.4 },
+    { date: '2026-05-18', weight: 96.81, fat: 21.0 },
+    { date: '2026-05-17', weight: 96.57, fat: 19.5 },
+    { date: '2026-05-16', weight: 96.63, fat: 20.1 },
+    { date: '2026-05-14', weight: 96.98, fat: 19.6 },
+    { date: '2026-05-13', weight: 96.81, fat: 19.6 },
+  ];
+  // Lean mass is always calculated: weight - absfat (no separate storage needed)
+  function leanMass(weight, fat) { return parseFloat((weight - weight * fat / 100).toFixed(2)); }
+
+  function loadData() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) return JSON.parse(raw);
+    } catch(e) {}
+    // First load: seed with historical data
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(SEED));
+    return SEED;
+  }
+
+  function saveData(data) {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  }
+
+  function fmt(n, dec=2) { return n.toFixed(dec).replace('.', ','); }
+
+  function fmtDate(iso) {
+    const [y,m,d] = iso.split('-');
+    return `${d}.${m}.${y.slice(2)}`;
+  }
+
+  function render() {
+    const data = loadData().sort((a,b) => b.date.localeCompare(a.date));
+    if (!data.length) return;
+
+    const latest = data[0];
+    const latestAbsfat = parseFloat((latest.weight * latest.fat / 100).toFixed(2));
+
+    // Snapshot with trend colors vs previous entry
+    const latestLean = leanMass(latest.weight, latest.fat);
+    const latestLeanPct = parseFloat((latestLean / latest.weight * 100).toFixed(1));
+    const prev = data[1]; // second most recent
+    const prevAbsfat = prev ? parseFloat((prev.weight * prev.fat / 100).toFixed(2)) : null;
+    const prevLean = prev ? leanMass(prev.weight, prev.fat) : null;
+    const prevLeanPct = prev ? parseFloat((prevLean / prev.weight * 100).toFixed(1)) : null;
+
+    function snapColor(cur, prevVal, lowerIsBetter) {
+      if (!prev || prevVal === null) return '#e8e8f0';
+      const diff = cur - prevVal;
+      if (Math.abs(diff) < 0.01) return '#60c8f0'; // same = blue
+      if (lowerIsBetter) return diff < 0 ? '#60f0a0' : '#f06060';
+      else               return diff > 0 ? '#60f0a0' : '#f06060';
+    }
+
+    function setSnap(id, val, dec, prevVal, lowerIsBetter) {
+      const el = document.getElementById(id);
+      el.textContent = val.toFixed(dec).replace('.', ',');
+      el.style.color = snapColor(val, prevVal, lowerIsBetter);
+    }
+
+    setSnap('cur-weight',  latest.weight,   2, prev ? prev.weight : null,   true);
+    setSnap('cur-absfat',  latestAbsfat,    2, prevAbsfat,                  true);
+    setSnap('cur-fat',     latest.fat,      1, prev ? prev.fat : null,      true);
+    setSnap('cur-lean',    latestLean,      2, prevLean,                    false);
+    setSnap('cur-leanpct', latestLeanPct,   1, prevLeanPct,                 false);
+
+    // MAX / MIN / AVG Gewicht seit Start
+    const weightsSinceStart = data
+      .filter(r => r.date >= START.date)
+      .map(r => r.weight);
+    if (weightsSinceStart.length) {
+      const wMax = Math.max(...weightsSinceStart);
+      const wMin = Math.min(...weightsSinceStart);
+      const wAvg = weightsSinceStart.reduce((a,b) => a+b, 0) / weightsSinceStart.length;
+      document.getElementById('w-max').textContent = fmt(wMax);
+      document.getElementById('w-min').textContent = fmt(wMin);
+      document.getElementById('w-avg').textContent = fmt(wAvg);
+    }
+
+    // Deltas vs start
+    const dw = latest.weight - START.weight;
+    const da = latestAbsfat - START.absfat;
+    const fatPctChange = ((latestAbsfat - START.absfat) / START.absfat * 100);
+
+    const dwEl = document.getElementById('d-weight-start');
+    dwEl.textContent = (dw >= 0 ? '+' : '') + fmt(dw);
+    dwEl.className = 'delta-val ' + (dw <= 0 ? 'good' : 'bad');
+
+    const daEl = document.getElementById('d-absfat-start');
+    daEl.textContent = (da >= 0 ? '+' : '') + fmt(da);
+    daEl.className = 'delta-val ' + (da <= 0 ? 'good' : 'bad');
+
+    const latestLeanVal = leanMass(latest.weight, latest.fat);
+    const dl = latestLeanVal - START.lean;
+    const dlEl = document.getElementById('d-lean-start');
+    dlEl.textContent = (dl >= 0 ? '+' : '') + fmt(dl);
+    dlEl.className = 'delta-val ' + (dl >= 0 ? 'good' : 'bad');
+
+    const fpEl = document.getElementById('d-fat-pct');
+    fpEl.textContent = (fatPctChange >= 0 ? '+' : '') + fmt(fatPctChange, 1) + '%';
+    fpEl.className = 'delta-val ' + (fatPctChange <= 0 ? 'good' : 'bad');
+
+    const gwEl = document.getElementById('d-weight-goal');
+    const gwVal = latest.weight - GOAL.weight;
+    gwEl.textContent = (gwVal > 0 ? '−' : '✓ ') + (gwVal > 0 ? fmt(gwVal) : '0,00');
+    gwEl.className = 'delta-val ' + (gwVal <= 0 ? 'good' : 'neutral');
+
+    const gaEl = document.getElementById('d-absfat-goal');
+    const gaVal = latestAbsfat - GOAL.absfat;
+    gaEl.textContent = (gaVal > 0 ? '−' : '✓ ') + (gaVal > 0 ? fmt(gaVal) : '0,00');
+    gaEl.className = 'delta-val ' + (gaVal <= 0 ? 'good' : 'neutral');
+
+
+    // Progress bars (% of journey from start to goal)
+    function barPct(cur, start, goal) {
+      const total = Math.abs(start - goal);
+      const done = Math.abs(cur - start);
+      return Math.min(100, Math.max(0, (done / total * 100)));
+    }
+
+    const pw = barPct(latest.weight, START.weight, GOAL.weight);
+    const pf = barPct(latest.fat, START.fat, GOAL.fat);
+    const pa = barPct(latestAbsfat, START.absfat, GOAL.absfat);
+
+    document.getElementById('pb-weight').style.width = pw + '%';
+    document.getElementById('pb-absfat').style.width = pa + '%';
+    document.getElementById('pb-w-lbl').textContent = fmt(pw,0) + '%';
+    document.getElementById('pb-a-lbl').textContent = fmt(pa,0) + '%';
+
+    // Table — only from START date onwards
+    const tableData = data.filter(r => r.date >= START.date);
+    const tbody = document.getElementById('table-body');
+    tbody.innerHTML = '';
+    tableData.forEach((row, i) => {
+      const absfat = parseFloat((row.weight * row.fat / 100).toFixed(2));
+      const isStart = row.date === START.date;
+      const prev = tableData[i+1]; // next entry (older, since sorted desc)
+      const prevAbsfat = prev ? parseFloat((prev.weight * prev.fat / 100).toFixed(2)) : null;
+      const dw2 = prev ? row.weight - prev.weight : null;
+      const df2 = prev ? row.fat - prev.fat : null;
+      const da2 = prev ? absfat - prevAbsfat : null;
+      function cls(delta) {
+        if (delta === null) return '';
+        if (Math.abs(delta) < 0.01) return 'same';
+        return delta < 0 ? 'good' : 'bad';
+      }
+      const tr = document.createElement('tr');
+      if (isStart) tr.className = 'start-row';
+      const lean = leanMass(row.weight, row.fat);
+      const prevLean = prev ? leanMass(prev.weight, prev.fat) : null;
+      const dl2 = prev ? lean - prevLean : null;
+      const leanPct = parseFloat((lean / row.weight * 100).toFixed(1));
+      const prevLeanPct = prev ? parseFloat((prevLean / prev.weight * 100).toFixed(1)) : null;
+      const dlp2 = prev ? leanPct - prevLeanPct : null;
+      tr.innerHTML = `
+        <td class="date-cell" onclick="confirmDelete('${row.date}')" title="Tippen zum Löschen">${fmtDate(row.date)}</td>
+        <td class="${cls(dw2)}">${fmt(row.weight)}</td>
+        <td class="${cls(da2)}">${fmt(absfat)}</td>
+        <td class="${cls(df2)}">${fmt(row.fat,1)}</td>
+        <td class="${dl2 === null ? 'lean-val' : dl2 > 0.01 ? 'lean-good' : dl2 < -0.01 ? 'lean-bad' : 'lean-same'}">${fmt(lean)}</td>
+        <td class="${dlp2 === null ? 'lean-val' : dlp2 > 0.01 ? 'lean-good' : dlp2 < -0.01 ? 'lean-bad' : 'lean-same'}">${leanPct.toFixed(1).replace('.',',')}%</td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+    
+    setTimeout(drawChart, 50);
+  }
+
+  function confirmDelete(date) {
+    // Show custom popup
+    const popup = document.getElementById('deletePopup');
+    const msg = document.getElementById('deleteMsg');
+    msg.textContent = `Eintrag vom ${fmtDate(date)} löschen?`;
+    popup.style.display = 'flex';
+    popup.dataset.date = date;
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('deleteConfirm').addEventListener('click', () => {
+      const date = document.getElementById('deletePopup').dataset.date;
+      const data = loadData().filter(r => r.date !== date);
+      saveData(data);
+      document.getElementById('deletePopup').style.display = 'none';
+      render();
+    });
+    document.getElementById('deleteCancel').addEventListener('click', () => {
+      document.getElementById('deletePopup').style.display = 'none';
+    });
+  });
+
+  function addEntry() {
+    const date = document.getElementById('in-date').value;
+    const weight = parseFloat(document.getElementById('in-weight').value);
+    const fat = parseFloat(document.getElementById('in-fat').value);
+    if (!date || isNaN(weight) || isNaN(fat)) {
+      alert('Bitte alle Felder ausfüllen.');
+      return;
+    }
+    const data = loadData().filter(r => r.date !== date);
+    data.push({ date, weight, fat });
+    saveData(data);
+    document.getElementById('in-date').value = '';
+    document.getElementById('in-weight').value = '';
+    document.getElementById('in-fat').value = '';
+    render();
+  }
+
+  // URL param handling (for Shortcut)
+  function checkUrlParams() {
+    const p = new URLSearchParams(window.location.search);
+    const w = parseFloat(p.get('w'));
+    const f = parseFloat(p.get('f'));
+    if (!isNaN(w) && !isNaN(f)) {
+      // Always use today's date in local timezone
+      const now = new Date();
+      const d = now.getFullYear() + '-' +
+        String(now.getMonth()+1).padStart(2,'0') + '-' +
+        String(now.getDate()).padStart(2,'0');
+      // Always overwrite entry for today with fresh values from Shortcut
+      const data = loadData().filter(r => r.date !== d);
+      data.push({ date: d, weight: w, fat: f });
+      data.sort((a, b) => b.date.localeCompare(a.date));
+      saveData(data);
+      // Clean URL
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }
+
+  // Set today as default date
+  document.getElementById('in-date').value = new Date().toISOString().slice(0,10);
+
+  // CHART
+  let activeChart = 'w';
+
+  function setChart(type) {
+    activeChart = type;
+    document.querySelectorAll('.chart-tab').forEach(t => {
+      t.className = 'chart-tab';
+    });
+    const tabs = document.querySelectorAll('.chart-tab');
+    if (type === 'w') tabs[0].className = 'chart-tab active-w';
+    if (type === 'a') tabs[1].className = 'chart-tab active-a';
+    drawChart();
+  }
+
+  let chartPoints = []; // [{x, y, val, date, row}] for tooltip hit testing
+
+  let chartExpanded = false;
+
+  function toggleChartExpand() {
+    chartExpanded = !chartExpanded;
+    drawChart();
+  }
+
+  function drawChart() {
+    const canvas = document.getElementById('myChart');
+    const ctx = canvas.getContext('2d');
+    // Only show data from START date onwards
+    let allData = loadData().sort((a,b) => a.date.localeCompare(b.date)).filter(r => r.date >= START.date);
+    // Default: last 7, with every other point shown (max 7 visible)
+    const data = chartExpanded ? allData : allData.slice(-7);
+    if (data.length < 2) return;
+
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = canvas.offsetWidth * dpr;
+    canvas.height = 180 * dpr;
+    ctx.scale(dpr, dpr);
+    const W = canvas.offsetWidth, H = 180;
+
+    ctx.clearRect(0, 0, W, H);
+
+    const vals = data.map(r => {
+      if (activeChart === 'w') return r.weight;
+      if (activeChart === 'f') return r.fat;
+      if (activeChart === 'l') return leanMass(r.weight, r.fat);
+      return parseFloat((r.weight * r.fat / 100).toFixed(2));
+    });
+
+    const goal = activeChart === 'w' ? GOAL.weight : activeChart === 'f' ? GOAL.fat : activeChart === 'l' ? (GOAL.weight - GOAL.absfat) : GOAL.absfat;
+    const color = activeChart === 'w' ? '#c8f060' : activeChart === 'f' ? '#f0b860' : activeChart === 'l' ? '#5bc8f5' : '#60c8f0';
+
+    const pad = { top: 20, bottom: 28, left: 8, right: 8 };
+    // Y axis: tight around data but always include goal line
+    const dataMin = Math.min(...vals, goal);
+    const dataMax = Math.max(...vals, goal);
+    const dataPad = Math.max((dataMax - dataMin) * 0.25, 0.2);
+    const minV = dataMin - dataPad;
+    const maxV = dataMax + dataPad;
+    const range = maxV - minV;
+
+    function xPos(i) { return pad.left + (i / (vals.length - 1)) * (W - pad.left - pad.right); }
+    function yPos(v) { return pad.top + (1 - (v - minV) / range) * (H - pad.top - pad.bottom); }
+
+    // Goal line
+    const gy = yPos(goal);
+    ctx.beginPath();
+    ctx.setLineDash([4, 4]);
+    ctx.strokeStyle = color + '40';
+    ctx.lineWidth = 1;
+    ctx.moveTo(pad.left, gy);
+    ctx.lineTo(W - pad.right, gy);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = color + '60';
+    ctx.font = '9px DM Mono, monospace';
+    const goalUnit = activeChart === 'f' ? ' %' : ' kg';
+    ctx.fillText('Ziel ' + goal + goalUnit, W - pad.right - 60, gy - 4);
+
+    // Area fill
+    const grad = ctx.createLinearGradient(0, pad.top, 0, H - pad.bottom);
+    grad.addColorStop(0, color + '30');
+    grad.addColorStop(1, color + '00');
+    ctx.beginPath();
+    vals.forEach((v, i) => {
+      i === 0 ? ctx.moveTo(xPos(i), yPos(v)) : ctx.lineTo(xPos(i), yPos(v));
+    });
+    ctx.lineTo(xPos(vals.length-1), H - pad.bottom);
+    ctx.lineTo(xPos(0), H - pad.bottom);
+    ctx.closePath();
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+    // Line
+    ctx.beginPath();
+    vals.forEach((v, i) => {
+      i === 0 ? ctx.moveTo(xPos(i), yPos(v)) : ctx.lineTo(xPos(i), yPos(v));
+    });
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.lineJoin = 'round';
+    ctx.stroke();
+
+    // Dots + labels
+    // Update chart toggle hint
+    const chartHint = document.getElementById('chartToggleHint');
+    if (chartHint) chartHint.textContent = chartExpanded ? '▲ Weniger anzeigen' : '▼ Alle anzeigen';
+
+    chartPoints = [];
+    vals.forEach((v, i) => {
+      const x = xPos(i), y = yPos(v);
+      chartPoints.push({ x, y, val: v, date: data[i].date, row: data[i] });
+      ctx.beginPath();
+      ctx.arc(x, y, 3, 0, Math.PI * 2);
+      ctx.fillStyle = color;
+      ctx.fill();
+
+      // Date label — first, ~1/3, ~2/3, last
+      const n = vals.length - 1;
+      const showDate = i === 0 || i === n ||
+                       i === Math.round(n / 3) ||
+                       i === Math.round(2 * n / 3);
+      if (showDate) {
+        const d = data[i].date;
+        const label = d.slice(8) + '.' + d.slice(5,7);
+        ctx.fillStyle = '#6a6a80';
+        ctx.font = '8px DM Mono, monospace';
+        ctx.textAlign = i === 0 ? 'left' : i === n ? 'right' : 'center';
+        ctx.fillText(label, x, H - pad.bottom + 12);
+      }
+
+      // Value label on first and last — above and away from the line
+      if (i === 0 || i === vals.length - 1) {
+        ctx.fillStyle = color;
+        ctx.font = '9px DM Mono, monospace';
+        const unit = activeChart === 'f' ? ' %' : ' kg';
+        const val = activeChart === 'f' ? v.toFixed(1) : v.toFixed(2);
+        const text = val + unit;
+        // First: top-left above point; Last: shifted left to avoid overlap with dot
+        if (i === 0) {
+          ctx.textAlign = 'left';
+          ctx.fillText(text, x, Math.max(pad.top + 10, y - 10));
+        } else {
+          ctx.textAlign = 'right';
+          ctx.fillText(text, x - 6, Math.max(pad.top + 10, y - 10));
+        }
+      }
+    });
+
+    // Start marker — subtle vertical line
+    const startIdx = data.findIndex(r => r.date === START.date);
+    if (startIdx >= 0) {
+    }
+  }
+
+  let tableExpanded = false;
+
+  function toggleTable() {
+    tableExpanded = !tableExpanded;
+    const scroll = document.getElementById('tableScroll');
+    const hint = document.getElementById('toggle-hint');
+    scroll.classList.toggle('expanded', tableExpanded);
+    hint.textContent = tableExpanded ? '▲ weniger anzeigen' : '▼ alle anzeigen';
+  }
+
+  checkUrlParams();
+  render();
+  setTimeout(drawChart, 100);
+  window.addEventListener('resize', drawChart);
+
+  // Tooltip on click/touch
+  const canvas = document.getElementById('myChart');
+  const tooltip = document.getElementById('chartTooltip');
+
+  function handleChartInteraction(clientX, clientY) {
+    const rect = canvas.getBoundingClientRect();
+    const x = clientX - rect.left;
+    const y = clientY - rect.top;
+
+    // Find nearest point
+    let nearest = null, minDist = Infinity;
+    chartPoints.forEach(p => {
+      const dist = Math.hypot(p.x - x, p.y - y);
+      if (dist < minDist) { minDist = dist; nearest = p; }
+    });
+
+    if (!nearest || minDist > 40) {
+      tooltip.style.display = 'none';
+      return;
+    }
+
+    const unit = activeChart === 'w' ? ' kg' : activeChart === 'f' ? ' %' : ' kg';
+    const decimals = activeChart === 'f' ? 1 : 2;
+    document.getElementById('tt-date').textContent = fmtDate(nearest.date);
+    document.getElementById('tt-val').textContent = nearest.val.toFixed(decimals).replace('.', ',') + unit;
+
+    // Position tooltip — centered above the point
+    tooltip.style.display = 'block';
+    const tw = 110; // fixed width matches CSS min-width
+    let tx = nearest.x - tw / 2;
+    let ty = nearest.y - 60;
+    if (tx < 0) tx = 0;
+    if (tx + tw > rect.width) tx = rect.width - tw;
+    if (ty < 0) ty = nearest.y + 12;
+    tooltip.style.left = tx + 'px';
+    tooltip.style.top = (ty + canvas.offsetTop) + 'px';
+  }
+
+  canvas.addEventListener('click', e => handleChartInteraction(e.clientX, e.clientY));
+  canvas.addEventListener('touchstart', e => {
+    e.preventDefault();
+    handleChartInteraction(e.touches[0].clientX, e.touches[0].clientY);
+  }, { passive: false });
+
+  // Hide tooltip when tapping elsewhere
+  document.addEventListener('click', e => {
+    if (e.target !== canvas) tooltip.style.display = 'none';
+  });
+</script>
+<!-- DELETE POPUP -->
+<div id="deletePopup" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:100; align-items:center; justify-content:center; padding:20px;">
+  <div style="background:#13131a; border:1px solid #2a2a38; border-radius:16px; padding:24px; max-width:300px; width:100%; text-align:center;">
+    <div id="deleteMsg" style="color:#e8e8f0; font-size:0.85rem; margin-bottom:20px; line-height:1.5;"></div>
+    <div style="display:flex; gap:10px;">
+      <button id="deleteCancel" style="flex:1; background:#1c1c26; border:1px solid #2a2a38; color:#6a6a80; border-radius:10px; padding:10px; font-family:'DM Mono',monospace; font-size:0.75rem; cursor:pointer;">Abbrechen</button>
+      <button id="deleteConfirm" style="flex:1; background:#f06060; border:none; color:#fff; border-radius:10px; padding:10px; font-family:'DM Mono',monospace; font-size:0.75rem; cursor:pointer; font-weight:500;">Löschen</button>
+    </div>
+  </div>
+</div>
+</body>
+</html>
