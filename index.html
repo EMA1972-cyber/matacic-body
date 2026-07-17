@@ -329,6 +329,22 @@
     overflow: visible;
   }
 
+  .table-more {
+    text-align: center;
+    padding: 12px;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.6rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #5bc8f5;
+    background: rgba(255,255,255,0.02);
+    border-top: 1px solid var(--border);
+    cursor: pointer;
+    user-select: none;
+  }
+  .table-more:hover { background: rgba(255,255,255,0.05); }
+  .table-more:active { opacity: 0.6; }
+
   .table-header {
     cursor: pointer;
     user-select: none;
@@ -823,6 +839,7 @@
     <tbody id="table-body"></tbody>
   </table>
   </div>
+  <div class="table-more" id="tableMore" onclick="toggleTable()">▼ Alle anzeigen</div>
 </div>
 
 <!-- STATUS -->
@@ -1277,9 +1294,19 @@
   function toggleTable() {
     tableExpanded = !tableExpanded;
     const scroll = document.getElementById('tableScroll');
-    const hint = document.getElementById('toggle-hint');
     scroll.classList.toggle('expanded', tableExpanded);
-    hint.textContent = tableExpanded ? '▲ weniger anzeigen' : '▼ alle anzeigen';
+    updateTableToggle();
+  }
+
+  // Beschriftung beider Schalter -- mit Anzahl, damit klar ist,
+  // wie viele Zeilen dahinter stecken
+  function updateTableToggle() {
+    const n = START ? DATA.filter(r => r.date >= START.date).length : 0;
+    const label = tableExpanded ? '▲ Weniger anzeigen' : '▼ Alle ' + n + ' anzeigen';
+    const hint = document.getElementById('toggle-hint');
+    const more = document.getElementById('tableMore');
+    if (hint) hint.textContent = label;
+    if (more) more.textContent = label;
   }
 
   // ============================================================
@@ -1302,6 +1329,7 @@
         return;
       }
       render();
+      updateTableToggle();
       setTimeout(drawChart, 60);
       status(DATA.length + ' Messungen · Start ' + fmtDate(START.date)
              + ' · Stand ' + fmtDate(DATA[0].date));
