@@ -1369,20 +1369,26 @@
     const btn = document.querySelector('.refresh-btn');
     btn.classList.add('spinning');
     status('Daten werden aktualisiert …');
-    try {
-      const res = await fetch(SYNC_URL);
-      const json = await res.json();
-      if (json.ok) {
-        await init();
-        status('Aktualisiert · ' + json.gespeichert + ' Messungen geladen');
-      } else {
-        status('Sync-Fehler: ' + (json.error ?? 'unbekannt'), true);
+
+    // Öffne Sync in neuem Tab — umgeht iOS CORS-Einschränkungen
+    const syncWindow = window.open(SYNC_URL, '_blank');
+
+    // Nach 4 Sekunden Dashboard neu laden
+    setTimeout(async () => {
+      if (syncWindow) syncWindow.close();
+      try {
+        DATA = await fetchData();
+        START = deriveStart(DATA);
+        render();
+        updateTableToggle();
+        setTimeout(drawChart, 60);
+        status(DATA.length + ' Messungen · Start ' + fmtDate(START.date) + ' · Stand ' + fmtDate(DATA[0].date));
+      } catch(e) {
+        status('Fehler beim Laden: ' + e.message, true);
+      } finally {
+        btn.classList.remove('spinning');
       }
-    } catch(e) {
-      status('Verbindungsfehler: ' + e.message, true);
-    } finally {
-      btn.classList.remove('spinning');
-    }
+    }, 4000);
   }
 
   // ============================================================
