@@ -590,9 +590,8 @@
   }
 
   .chart-tab.active-w { border-color: #c8f060; color: #c8f060; }
-  .chart-tab.active-f { border-color: var(--warn); color: var(--warn); }
-  .chart-tab.active-a { border-color: #60c8f0; color: #60c8f0; }
-  .chart-tab.active-l { border-color: #1a7fc4; color: #1a7fc4; }
+  .chart-tab.active-m { border-color: #3dd68c; color: #3dd68c; }
+  .chart-tab.active-a { border-color: #5bc8f5; color: #5bc8f5; }
 
   canvas {
     width: 100% !important;
@@ -843,8 +842,9 @@
 <div class="chart-wrap">
   <div class="chart-title">Verlauf</div>
   <div class="chart-tabs">
-    <div class="chart-tab active-w" onclick="setChart('w')">Gewicht</div>
-    <div class="chart-tab" onclick="setChart('a')">Fett</div>
+    <div class="chart-tab active-w" onclick="setChart('w')">GEWICHT</div>
+    <div class="chart-tab" onclick="setChart('m')">MUSKEL</div>
+    <div class="chart-tab" onclick="setChart('a')">FETT</div>
   </div>
   <div id="chartToggleHint" onclick="toggleChartExpand()" style="text-align:center; font-size:0.55rem; font-family:'DM Mono',monospace; letter-spacing:0.1em; text-transform:uppercase; color:var(--muted); margin-bottom:8px; cursor:pointer; user-select:none;">▼ Alle anzeigen</div>
   <canvas id="myChart"></canvas>
@@ -1172,8 +1172,8 @@
         <td class="${cls(dw2, true)}">${dash(row.weight, 2)}</td>
         <td class="${dm2 === null ? '' : dm2 > 0.01 ? 'lean-good' : dm2 < -0.01 ? 'lean-bad' : 'lean-same'}">${dash(row.muscle, 2)}</td>
         <td class="${cls(dfa2, true)}">${dash(row.absfat, 2)}</td>
-        <td class="${dwat2 === null ? '' : Math.abs(dwat2) < 0.1 ? 'same' : 'neutral'}">${dash(row.water, 2)}</td>
-        <td class="${dbon2 === null ? '' : Math.abs(dbon2) < 0.01 ? 'same' : 'neutral'}">${dash(row.bone, 2)}</td>
+        <td class="${dwat2 === null ? '' : Math.abs(dwat2) < 0.1 ? 'same' : dwat2 < 0 ? 'good' : 'bad'}">${dash(row.water, 2)}</td>
+        <td class="lean-val">${dash(row.bone, 2)}</td>
       `;
       tbody.appendChild(tr);
     });
@@ -1188,12 +1188,11 @@
 
   function setChart(type) {
     activeChart = type;
-    document.querySelectorAll('.chart-tab').forEach(t => {
-      t.className = 'chart-tab';
-    });
     const tabs = document.querySelectorAll('.chart-tab');
+    tabs.forEach(t => t.className = 'chart-tab');
     if (type === 'w') tabs[0].className = 'chart-tab active-w';
-    if (type === 'a') tabs[1].className = 'chart-tab active-a';
+    if (type === 'm') tabs[1].className = 'chart-tab active-m';
+    if (type === 'a') tabs[2].className = 'chart-tab active-a';
     drawChart();
   }
 
@@ -1226,51 +1225,63 @@
 
     const vals = data.map(r => {
       if (activeChart === 'w') return r.weight;
-      if (activeChart === 'f') return r.fat;
-      if (activeChart === 'l') return r.lean;
+      if (activeChart === 'm') return r.muscle;
+      return r.absfat;
+    }).filter((v, i, arr) => v !== null || arr.some(x => x !== null));
+
+    // Filter out null values for muscle (not every day has it)
+    const validData = data.filter(r => {
+      if (activeChart === 'm') return r.muscle !== null;
+      if (activeChart === 'w') return r.weight !== null;
+      return r.absfat !== null;
+    });
+    const validVals = validData.map(r => {
+      if (activeChart === 'w') return r.weight;
       if (activeChart === 'm') return r.muscle;
       return r.absfat;
     });
 
-    const goal = activeChart === 'w' ? GOAL.weight : activeChart === 'f' ? GOAL.fat : activeChart === 'l' ? (GOAL.weight - GOAL.absfat) : GOAL.absfat;
-    const color = activeChart === 'w' ? '#c8f060' : activeChart === 'f' ? '#f0b860' : activeChart === 'l' ? '#5bc8f5' : '#60c8f0';
+    const goal = activeChart === 'w' ? GOAL.weight : activeChart === 'a' ? GOAL.absfat : null;
+    const color = activeChart === 'w' ? '#c8f060' : activeChart === 'm' ? '#3dd68c' : '#5bc8f5';
+
+    if (validVals.length < 2) return;
 
     const pad = { top: 20, bottom: 28, left: 8, right: 8 };
-    // Y axis: tight around data but always include goal line
-    const dataMin = Math.min(...vals, goal);
-    const dataMax = Math.max(...vals, goal);
+    const dataMin = goal !== null ? Math.min(...validVals, goal) : Math.min(...validVals);
+    const dataMax = goal !== null ? Math.max(...validVals, goal) : Math.max(...validVals);
     const dataPad = Math.max((dataMax - dataMin) * 0.25, 0.2);
     const minV = dataMin - dataPad;
     const maxV = dataMax + dataPad;
     const range = maxV - minV;
 
-    function xPos(i) { return pad.left + (i / (vals.length - 1)) * (W - pad.left - pad.right); }
+    function xPos(i) { return pad.left + (i / (validVals.length - 1)) * (W - pad.left - pad.right); }
     function yPos(v) { return pad.top + (1 - (v - minV) / range) * (H - pad.top - pad.bottom); }
 
-    // Goal line
-    const gy = yPos(goal);
-    ctx.beginPath();
-    ctx.setLineDash([4, 4]);
-    ctx.strokeStyle = color + '40';
-    ctx.lineWidth = 1;
-    ctx.moveTo(pad.left, gy);
-    ctx.lineTo(W - pad.right, gy);
-    ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.fillStyle = color + '60';
-    ctx.font = '9px DM Mono, monospace';
-    const goalUnit = activeChart === 'f' ? ' %' : ' kg';
-    ctx.fillText('Ziel ' + goal + goalUnit, W - pad.right - 60, gy - 4);
+    // Goal line (nur wenn Zielwert definiert)
+    if (goal !== null) {
+      const gy = yPos(goal);
+      ctx.beginPath();
+      ctx.setLineDash([4, 4]);
+      ctx.strokeStyle = color + '40';
+      ctx.lineWidth = 1;
+      ctx.moveTo(pad.left, gy);
+      ctx.lineTo(W - pad.right, gy);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = color + '60';
+      ctx.font = '9px DM Mono, monospace';
+      ctx.fillText('Ziel ' + goal + ' kg', W - pad.right - 60, gy - 4);
+    }
 
     // Area fill
     const grad = ctx.createLinearGradient(0, pad.top, 0, H - pad.bottom);
     grad.addColorStop(0, color + '30');
     grad.addColorStop(1, color + '00');
     ctx.beginPath();
-    vals.forEach((v, i) => {
+    validVals.forEach((v, i) => {
       i === 0 ? ctx.moveTo(xPos(i), yPos(v)) : ctx.lineTo(xPos(i), yPos(v));
     });
-    ctx.lineTo(xPos(vals.length-1), H - pad.bottom);
+    ctx.lineTo(xPos(validVals.length-1), H - pad.bottom);
     ctx.lineTo(xPos(0), H - pad.bottom);
     ctx.closePath();
     ctx.fillStyle = grad;
@@ -1278,7 +1289,7 @@
 
     // Line
     ctx.beginPath();
-    vals.forEach((v, i) => {
+    validVals.forEach((v, i) => {
       i === 0 ? ctx.moveTo(xPos(i), yPos(v)) : ctx.lineTo(xPos(i), yPos(v));
     });
     ctx.strokeStyle = color;
@@ -1286,27 +1297,24 @@
     ctx.lineJoin = 'round';
     ctx.stroke();
 
-    // Dots + labels
-    // Update chart toggle hint
     const chartHint = document.getElementById('chartToggleHint');
     if (chartHint) chartHint.textContent = chartExpanded ? '▲ Weniger anzeigen' : '▼ Alle anzeigen';
 
     chartPoints = [];
-    vals.forEach((v, i) => {
+    validVals.forEach((v, i) => {
       const x = xPos(i), y = yPos(v);
-      chartPoints.push({ x, y, val: v, date: data[i].date, row: data[i] });
+      chartPoints.push({ x, y, val: v, date: validData[i].date, row: validData[i] });
       ctx.beginPath();
       ctx.arc(x, y, 3, 0, Math.PI * 2);
       ctx.fillStyle = color;
       ctx.fill();
 
-      // Date label — first, ~1/3, ~2/3, last
-      const n = vals.length - 1;
+      const n = validVals.length - 1;
       const showDate = i === 0 || i === n ||
                        i === Math.round(n / 3) ||
                        i === Math.round(2 * n / 3);
       if (showDate) {
-        const d = data[i].date;
+        const d = validData[i].date;
         const label = d.slice(8) + '.' + d.slice(5,7);
         ctx.fillStyle = '#6a6a80';
         ctx.font = '8px DM Mono, monospace';
@@ -1314,14 +1322,12 @@
         ctx.fillText(label, x, H - pad.bottom + 12);
       }
 
-      // Value label on first and last — above and away from the line
-      if (i === 0 || i === vals.length - 1) {
+      if (i === 0 || i === validVals.length - 1) {
         ctx.fillStyle = color;
         ctx.font = '9px DM Mono, monospace';
-        const unit = activeChart === 'f' ? ' %' : ' kg';
-        const val = activeChart === 'f' ? v.toFixed(1) : v.toFixed(2);
+        const unit = ' kg';
+        const val = v.toFixed(2);
         const text = val + unit;
-        // First: top-left above point; Last: shifted left to avoid overlap with dot
         if (i === 0) {
           ctx.textAlign = 'left';
           ctx.fillText(text, x, Math.max(pad.top + 10, y - 10));
@@ -1332,8 +1338,7 @@
       }
     });
 
-    // Start marker — subtle vertical line
-    const startIdx = data.findIndex(r => r.date === START.date);
+    const startIdx = validData.findIndex(r => r.date === START.date);
     if (startIdx >= 0) {
     }
   }
