@@ -699,29 +699,17 @@
       <div class="snap-val" id="cur-weight">—</div>
       <div class="snap-unit">KG</div>
     </div>
-    <!-- Col 2: Fett -->
-    <div class="snap-col">
+    <!-- Col 2: Fett % -->
+    <div class="snap-col snap-col-center">
       <div class="snap-lbl">Körperfett</div>
-      <div class="snap-row">
-        <div class="snap-val" id="cur-absfat">—</div>
-        <div class="snap-unit">KG</div>
-      </div>
-      <div class="snap-row">
-        <div class="snap-val" id="cur-fat">—</div>
-        <div class="snap-unit">%</div>
-      </div>
+      <div class="snap-val" id="cur-fat">—</div>
+      <div class="snap-unit">%</div>
     </div>
-    <!-- Col 3: Muskelmasse -->
-    <div class="snap-col">
+    <!-- Col 3: Muskel % -->
+    <div class="snap-col snap-col-center">
       <div class="snap-lbl">Muskelmasse</div>
-      <div class="snap-row">
-        <div class="snap-val" id="cur-muscle">—</div>
-        <div class="snap-unit">KG</div>
-      </div>
-      <div class="snap-row">
-        <div class="snap-val" id="cur-muscle-p">—</div>
-        <div class="snap-unit">%</div>
-      </div>
+      <div class="snap-val" id="cur-muscle-p">—</div>
+      <div class="snap-unit">%</div>
     </div>
   </div>
 </div>
@@ -755,10 +743,16 @@
       <div class="comp-pct" id="c-visc-note">—</div>
     </div>
     <div class="comp-item">
-      <div class="comp-lbl">Grundumsatz</div>
-      <div class="comp-val" id="c-bmr">—</div>
-      <div class="comp-unit">KCAL</div>
-      <div class="comp-pct">&nbsp;</div>
+      <div class="comp-lbl">Körperfett</div>
+      <div class="comp-val" id="c-fatkg">—</div>
+      <div class="comp-unit">KG</div>
+      <div class="comp-pct" id="c-fatkg-p">—</div>
+    </div>
+    <div class="comp-item">
+      <div class="comp-lbl">BMI</div>
+      <div class="comp-val" id="c-bmi">—</div>
+      <div class="comp-unit">KG/M²</div>
+      <div class="comp-pct" id="c-bmi-note">—</div>
     </div>
     <div class="comp-item">
       <div class="comp-lbl">PWG</div>
@@ -1009,21 +1003,15 @@
     }
 
     setSnap('cur-weight',  latest.weight,   2, prev ? prev.weight : null,   true);
-    setSnap('cur-absfat',  latestAbsfat,    2, prevAbsfat,                  true);
     setSnap('cur-fat',     latest.fat,      1, prev ? prev.fat : null,      true);
 
-    // Muskelmasse statt Magermasse
-    const muscleEl = document.getElementById('cur-muscle');
+    // Muskel %
     const musclePEl = document.getElementById('cur-muscle-p');
-    if (latest.muscle !== null) {
-      const prevMuscle = prev ? prev.muscle : null;
-      muscleEl.textContent = fmt(latest.muscle);
-      muscleEl.style.color = snapColor(latest.muscle, prevMuscle, false);
-      musclePEl.textContent = (latest.muscle / latest.weight * 100).toFixed(1).replace('.', ',');
-      musclePEl.style.color = snapColor(latest.muscle, prevMuscle, false);
-    } else {
-      muscleEl.textContent = '—';
-      musclePEl.textContent = '—';
+    if (musclePEl && latest.muscle !== null) {
+      const pct = latest.muscle / latest.weight * 100;
+      const prevPct = (prev && prev.muscle !== null) ? prev.muscle / prev.weight * 100 : null;
+      musclePEl.textContent = pct.toFixed(1).replace('.', ',');
+      musclePEl.style.color = snapColor(pct, prevPct, false);
     }
 
     // ---- Koerperzusammensetzung ----
@@ -1047,7 +1035,32 @@
     setComp('c-water',  'c-water-p',  latest.water,  2, true);
     setComp('c-bone',   'c-bone-p',   latest.bone,   2, true);
     setComp('c-visc',   null,         latest.visceral, 1, false);
-    setComp('c-bmr',    null,         latest.bmr,    0, false);
+
+    // Körperfett kg
+    const fatKgEl = document.getElementById('c-fatkg');
+    const fatKgP  = document.getElementById('c-fatkg-p');
+    if (fatKgEl && latest.absfat !== null) {
+      fatKgEl.textContent = fmt(latest.absfat);
+      fatKgEl.style.color = '#d63b3b';
+      if (fatKgP) { fatKgP.textContent = fmt(latest.fat, 1) + ' %'; fatKgP.style.color = '#d63b3b'; }
+    }
+
+    // BMI berechnen (Körpergröße 185cm -- kann später dynamisch gemacht werden)
+    const HEIGHT_M = 1.84;
+    const bmi = latest.weight / (HEIGHT_M * HEIGHT_M);
+    const bmiEl = document.getElementById('c-bmi');
+    const bmiNote = document.getElementById('c-bmi-note');
+    if (bmiEl) {
+      bmiEl.textContent = bmi.toFixed(1).replace('.', ',');
+      let cat = '', col = '#60f0a0';
+      if (bmi < 18.5)      { cat = 'Untergewicht'; col = '#5bc8f5'; }
+      else if (bmi < 25)   { cat = 'Normal';        col = '#60f0a0'; }
+      else if (bmi < 30)   { cat = 'Übergewicht';   col = '#e8a020'; }
+      else                 { cat = 'Adipositas';     col = '#d63b3b'; }
+      bmiEl.style.color = col;
+      if (bmiNote) { bmiNote.textContent = cat; bmiNote.style.color = col; }
+    }
+
     setComp('c-pwv',    null,         latest.pwv,    1, false);
 
     // PWG wird nicht bei jeder Messung erfasst -- letzten bekannten Wert zeigen
