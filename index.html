@@ -455,7 +455,8 @@
 
   td.good { color: #60f0a0; }
   td.bad  { color: var(--danger); }
-  td.same { color: var(--accent2); }
+  td.same    { color: var(--accent2); }
+  td.neutral { color: var(--muted); }
   td.lean-val  { color: #1a7fc4; }
   td.lean-good { color: #60f0a0; }
   td.lean-bad  { color: #d63b3b; }
@@ -711,15 +712,15 @@
         <div class="snap-unit">%</div>
       </div>
     </div>
-    <!-- Col 3: Mager -->
+    <!-- Col 3: Muskelmasse -->
     <div class="snap-col">
-      <div class="snap-lbl">Magere Masse</div>
+      <div class="snap-lbl">Muskelmasse</div>
       <div class="snap-row">
-        <div class="snap-val" id="cur-lean">—</div>
+        <div class="snap-val" id="cur-muscle">—</div>
         <div class="snap-unit">KG</div>
       </div>
       <div class="snap-row">
-        <div class="snap-val" id="cur-leanpct">—</div>
+        <div class="snap-val" id="cur-muscle-p">—</div>
         <div class="snap-unit">%</div>
       </div>
     </div>
@@ -801,8 +802,8 @@
         <div class="summary-unit">KG</div>
       </div>
       <div class="summary-item">
-        <div class="summary-sub">Magere Masse</div>
-        <div class="delta-val good" id="d-lean-start">—</div>
+        <div class="summary-sub">Muskelmasse</div>
+        <div class="delta-val good" id="d-muscle-start">—</div>
         <div class="summary-unit">KG</div>
       </div>
       <div class="summary-item summary-item-full">
@@ -864,10 +865,10 @@
       <tr>
         <th>Datum</th>
         <th>KG</th>
-        <th>Fett KG</th>
-        <th>Fett %</th>
-        <th>Mager KG</th>
-        <th>Mager %</th>
+        <th>Muskel</th>
+        <th>Fett</th>
+        <th>Wasser</th>
+        <th>Knochen</th>
       </tr>
     </thead>
     <tbody id="table-body"></tbody>
@@ -1010,8 +1011,20 @@
     setSnap('cur-weight',  latest.weight,   2, prev ? prev.weight : null,   true);
     setSnap('cur-absfat',  latestAbsfat,    2, prevAbsfat,                  true);
     setSnap('cur-fat',     latest.fat,      1, prev ? prev.fat : null,      true);
-    setSnap('cur-lean',    latestLean,      2, prevLean,                    false);
-    setSnap('cur-leanpct', latestLeanPct,   1, prevLeanPct,                 false);
+
+    // Muskelmasse statt Magermasse
+    const muscleEl = document.getElementById('cur-muscle');
+    const musclePEl = document.getElementById('cur-muscle-p');
+    if (latest.muscle !== null) {
+      const prevMuscle = prev ? prev.muscle : null;
+      muscleEl.textContent = fmt(latest.muscle);
+      muscleEl.style.color = snapColor(latest.muscle, prevMuscle, false);
+      musclePEl.textContent = (latest.muscle / latest.weight * 100).toFixed(1).replace('.', ',');
+      musclePEl.style.color = snapColor(latest.muscle, prevMuscle, false);
+    } else {
+      muscleEl.textContent = '—';
+      musclePEl.textContent = '—';
+    }
 
     // ---- Koerperzusammensetzung ----
     // Withings liefert Muskel/Wasser/Knochen in kg. Die Prozente,
@@ -1082,10 +1095,15 @@
     daEl.textContent = (da >= 0 ? '+' : '') + fmt(da);
     daEl.className = 'delta-val ' + (da <= 0 ? 'good' : 'bad');
 
-    const dl = latestLean - START.lean;
-    const dlEl = document.getElementById('d-lean-start');
-    dlEl.textContent = (dl >= 0 ? '+' : '') + fmt(dl);
-    dlEl.className = 'delta-val ' + (dl >= 0 ? 'good' : 'bad');
+    const dl = latest.muscle !== null && START.muscle !== null ? latest.muscle - START.muscle : null;
+    const dlEl = document.getElementById('d-muscle-start');
+    if (dl !== null) {
+      dlEl.textContent = (dl >= 0 ? '+' : '') + fmt(dl);
+      dlEl.className = 'delta-val ' + (dl >= 0 ? 'good' : 'bad');
+    } else {
+      dlEl.textContent = '—';
+      dlEl.className = 'delta-val neutral';
+    }
 
     const fpEl = document.getElementById('d-fat-pct');
     fpEl.textContent = (fatPctChange >= 0 ? '+' : '') + fmt(fatPctChange, 1) + '%';
@@ -1132,33 +1150,30 @@
     }
 
     tableData.forEach((row, i) => {
-      const absfat = row.absfat;
       const isStart = row.date === START.date;
-      const prev = tableData[i+1]; // next entry (older, since sorted desc)
-      const prevAbsfat = prev ? prev.absfat : null;
-      const dw2 = prev ? row.weight - prev.weight : null;
-      const df2 = (prev && row.fat !== null && prev.fat !== null) ? row.fat - prev.fat : null;
-      const da2 = (prev && absfat !== null && prevAbsfat !== null) ? absfat - prevAbsfat : null;
-      function cls(delta) {
+      const prev = tableData[i+1];
+      const dw2   = prev ? row.weight - prev.weight : null;
+      const dm2   = (prev && row.muscle !== null && prev.muscle !== null) ? row.muscle - prev.muscle : null;
+      const dfa2  = (prev && row.absfat !== null && prev.absfat !== null) ? row.absfat - prev.absfat : null;
+      const dwat2 = (prev && row.water !== null && prev.water !== null) ? row.water - prev.water : null;
+      const dbon2 = (prev && row.bone !== null && prev.bone !== null) ? row.bone - prev.bone : null;
+
+      function cls(delta, lowerBetter) {
         if (delta === null) return '';
         if (Math.abs(delta) < 0.01) return 'same';
-        return delta < 0 ? 'good' : 'bad';
+        const improved = lowerBetter ? delta < 0 : delta > 0;
+        return improved ? 'good' : 'bad';
       }
+
       const tr = document.createElement('tr');
       if (isStart) tr.className = 'start-row';
-      const lean = row.lean;
-      const prevLean = prev ? prev.lean : null;
-      const dl2 = (prev && lean !== null && prevLean !== null) ? lean - prevLean : null;
-      const leanPct = lean !== null ? lean / row.weight * 100 : null;
-      const prevLeanPct = (prev && prevLean !== null) ? prevLean / prev.weight * 100 : null;
-      const dlp2 = (leanPct !== null && prevLeanPct !== null) ? leanPct - prevLeanPct : null;
       tr.innerHTML = `
         <td class="date-cell">${fmtDate(row.date)}</td>
-        <td class="${cls(dw2)}">${dash(row.weight, 2)}</td>
-        <td class="${cls(da2)}">${dash(absfat, 2)}</td>
-        <td class="${cls(df2)}">${dash(row.fat, 1)}</td>
-        <td class="${dl2 === null ? 'lean-val' : dl2 > 0.01 ? 'lean-good' : dl2 < -0.01 ? 'lean-bad' : 'lean-same'}">${dash(lean, 2)}</td>
-        <td class="${dlp2 === null ? 'lean-val' : dlp2 > 0.01 ? 'lean-good' : dlp2 < -0.01 ? 'lean-bad' : 'lean-same'}">${leanPct === null ? '—' : leanPct.toFixed(1).replace('.',',') + '%'}</td>
+        <td class="${cls(dw2, true)}">${dash(row.weight, 2)}</td>
+        <td class="${dm2 === null ? '' : dm2 > 0.01 ? 'lean-good' : dm2 < -0.01 ? 'lean-bad' : 'lean-same'}">${dash(row.muscle, 2)}</td>
+        <td class="${cls(dfa2, true)}">${dash(row.absfat, 2)}</td>
+        <td class="${dwat2 === null ? '' : Math.abs(dwat2) < 0.1 ? 'same' : 'neutral'}">${dash(row.water, 2)}</td>
+        <td class="${dbon2 === null ? '' : Math.abs(dbon2) < 0.01 ? 'same' : 'neutral'}">${dash(row.bone, 2)}</td>
       `;
       tbody.appendChild(tr);
     });
