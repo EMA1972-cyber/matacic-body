@@ -1053,10 +1053,13 @@
     if (bmiEl) {
       bmiEl.textContent = bmi.toFixed(1).replace('.', ',');
       let cat = '', col = '#60f0a0';
-      if (bmi < 18.5)      { cat = 'Untergewicht'; col = '#5bc8f5'; }
-      else if (bmi < 25)   { cat = 'Normal';        col = '#60f0a0'; }
-      else if (bmi < 30)   { cat = 'Übergewicht';   col = '#e8a020'; }
-      else                 { cat = 'Adipositas';     col = '#d63b3b'; }
+      if      (bmi < 18.5) { cat = 'Untergewicht';       col = '#5bc8f5'; }
+      else if (bmi < 25.0) { cat = 'Normal';              col = '#60f0a0'; }
+      else if (bmi < 27.5) { cat = 'Leicht übergewichtig'; col = '#e8a020'; }
+      else if (bmi < 30.0) { cat = 'Übergewicht';         col = '#e06030'; }
+      else if (bmi < 35.0) { cat = 'Adipositas I';        col = '#e06030'; }
+      else if (bmi < 40.0) { cat = 'Adipositas II';       col = '#d63b3b'; }
+      else                 { cat = 'Adipositas III';       col = '#a02020'; }
       bmiEl.style.color = col;
       if (bmiNote) { bmiNote.textContent = cat; bmiNote.style.color = col; }
     }
