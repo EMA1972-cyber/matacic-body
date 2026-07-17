@@ -40,7 +40,29 @@
     text-align: center;
     margin-bottom: 32px;
     padding-top: 8px;
+    position: relative;
   }
+  .refresh-btn {
+    position: absolute;
+    top: 8px;
+    right: 0;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    color: var(--muted);
+    width: 38px;
+    height: 38px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+    padding: 0;
+  }
+  .refresh-btn:hover { background: rgba(255,255,255,0.12); color: var(--text); }
+  .refresh-btn:active { opacity: 0.6; }
+  .refresh-btn.spinning svg { animation: spin 0.8s linear infinite; }
+  @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
   header h1 {
     font-family: 'DM Serif Display', serif;
@@ -656,6 +678,13 @@
 <header>
   <h1>Body Tracking</h1>
   <p>Ziel: 80 kg · 10% · 8,0 kg Fett</p>
+  <button class="refresh-btn" onclick="manualSync()" title="Daten aktualisieren">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M23 4v6h-6"/>
+      <path d="M1 20v-6h6"/>
+      <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
+    </svg>
+  </button>
 </header>
 
 <!-- SNAPSHOT -->
@@ -1310,6 +1339,28 @@
     const more = document.getElementById('tableMore');
     if (hint) hint.textContent = label;
     if (more) more.textContent = label;
+  }
+
+  const SYNC_URL = 'https://atzcaxahulifnuvwxcpa.supabase.co/functions/v1/withings-sync?key=sync-4b91d7e6-matacic';
+
+  async function manualSync() {
+    const btn = document.querySelector('.refresh-btn');
+    btn.classList.add('spinning');
+    status('Daten werden aktualisiert …');
+    try {
+      const res = await fetch(SYNC_URL);
+      const json = await res.json();
+      if (json.ok) {
+        await init();
+        status('Aktualisiert · ' + json.gespeichert + ' Messungen geladen');
+      } else {
+        status('Sync-Fehler: ' + (json.error ?? 'unbekannt'), true);
+      }
+    } catch(e) {
+      status('Verbindungsfehler: ' + e.message, true);
+    } finally {
+      btn.classList.remove('spinning');
+    }
   }
 
   // ============================================================
