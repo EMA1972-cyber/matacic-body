@@ -1436,9 +1436,9 @@
         ? (slope > 0 ? '#3dd68c' : '#d63b3b')   // Muskel: hoch = gut
         : (slope < 0 ? '#3dd68c' : '#d63b3b');  // Gewicht/Fett: runter = gut
       ctx.fillStyle = trendColor;
-      ctx.font = 'bold 9px DM Mono, monospace';
+      ctx.font = 'bold 10px DM Mono, monospace';
       ctx.textAlign = 'right';
-      ctx.fillText('Trend 30T: ' + trendLabel, x1 - 4, y1 - 8);
+      ctx.fillText('Trend 30T: ' + trendLabel, W - pad.right - 4, pad.top + 14);
       ctx.restore();
     }
 
