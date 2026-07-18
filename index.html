@@ -172,6 +172,63 @@
     text-align: center;
   }
 
+  /* --- LETZTE MESSUNG unified block --- */
+  .lm-weight-row {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    margin-bottom: 16px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  .lm-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 8px;
+    text-align: center;
+    margin-bottom: 12px;
+  }
+  .lm-grid-sep {
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+  }
+  .lm-pwg-row {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+    margin-top: 4px;
+  }
+  .lm-item { display: flex; flex-direction: column; align-items: center; gap: 1px; }
+  .lm-lbl {
+    font-size: 0.55rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    margin-bottom: 2px;
+  }
+  .lm-val {
+    font-size: 1.4rem;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    line-height: 1.1;
+  }
+  .lm-weight-row .lm-val { font-size: 2rem; }
+  .lm-unit {
+    font-size: 0.5rem;
+    letter-spacing: 0.1em;
+    color: #4a4a5a;
+    text-transform: uppercase;
+  }
+  .lm-pct {
+    font-size: 0.75rem;
+    color: var(--muted);
+    margin-top: 1px;
+  }
+
   /* --- Koerperzusammensetzung --- */
   .comp-grid {
     display: grid;
@@ -689,77 +746,67 @@
   </button>
 </header>
 
-<!-- SNAPSHOT -->
+<!-- LETZTE MESSUNG — einheitlicher Block -->
 <div class="snapshot">
-  <div class="snapshot-label">Letzte Messung</div>
-  <div class="snap-grid">
-    <!-- Col 1: Gewicht -->
-    <div class="snap-col snap-col-center">
-      <div class="snap-lbl">Gewicht</div>
-      <div class="snap-val" id="cur-weight">—</div>
-      <div class="snap-unit">KG</div>
+  <div class="snapshot-label">LETZTE MESSUNG</div>
+
+  <!-- Gewicht mittig in eigener Zeile -->
+  <div class="lm-weight-row">
+    <div class="lm-lbl">GEWICHT</div>
+    <div class="lm-val" id="cur-weight">—</div>
+    <div class="lm-unit">KG</div>
+  </div>
+
+  <!-- 3er Grid: Muskel / Fett / Knochen -->
+  <div class="lm-grid">
+    <div class="lm-item">
+      <div class="lm-lbl">MUSKEL</div>
+      <div class="lm-val" id="c-muscle">—</div>
+      <div class="lm-unit">KG</div>
+      <div class="lm-pct" id="c-muscle-p">—</div>
     </div>
-    <!-- Col 2: Fett % -->
-    <div class="snap-col snap-col-center">
-      <div class="snap-lbl">Körperfett</div>
-      <div class="snap-val" id="cur-fat">—</div>
-      <div class="snap-unit">%</div>
+    <div class="lm-item">
+      <div class="lm-lbl">FETT</div>
+      <div class="lm-val" id="c-fatkg">—</div>
+      <div class="lm-unit">KG</div>
+      <div class="lm-pct" id="c-fatkg-p">—</div>
     </div>
-    <!-- Col 3: Muskel % -->
-    <div class="snap-col snap-col-center">
-      <div class="snap-lbl">Muskelmasse</div>
-      <div class="snap-val" id="cur-muscle-p">—</div>
-      <div class="snap-unit">%</div>
+    <div class="lm-item">
+      <div class="lm-lbl">KNOCHEN</div>
+      <div class="lm-val" id="c-bone">—</div>
+      <div class="lm-unit">KG</div>
+      <div class="lm-pct" id="c-bone-p">—</div>
     </div>
   </div>
-</div>
 
-<!-- KOERPERZUSAMMENSETZUNG -->
-<div class="snapshot">
-  <div class="snapshot-label">Körperzusammensetzung</div>
-  <div class="comp-grid">
-    <div class="comp-item">
-      <div class="comp-lbl">Muskel</div>
-      <div class="comp-val" id="c-muscle">—</div>
-      <div class="comp-unit">KG</div>
-      <div class="comp-pct" id="c-muscle-p">—</div>
+  <!-- 3er Grid: Wasser / Viszeral / BMI -->
+  <div class="lm-grid lm-grid-sep">
+    <div class="lm-item">
+      <div class="lm-lbl">WASSER</div>
+      <div class="lm-val" id="c-water">—</div>
+      <div class="lm-unit">KG</div>
+      <div class="lm-pct" id="c-water-p">—</div>
     </div>
-    <div class="comp-item">
-      <div class="comp-lbl">Wasser</div>
-      <div class="comp-val" id="c-water">—</div>
-      <div class="comp-unit">KG</div>
-      <div class="comp-pct" id="c-water-p">—</div>
+    <div class="lm-item">
+      <div class="lm-lbl">VISZERAL</div>
+      <div class="lm-val" id="c-visc">—</div>
+      <div class="lm-unit">INDEX</div>
+      <div class="lm-pct" id="c-visc-note">&nbsp;</div>
     </div>
-    <div class="comp-item">
-      <div class="comp-lbl">Knochen</div>
-      <div class="comp-val" id="c-bone">—</div>
-      <div class="comp-unit">KG</div>
-      <div class="comp-pct" id="c-bone-p">—</div>
+    <div class="lm-item">
+      <div class="lm-lbl">BMI</div>
+      <div class="lm-val" id="c-bmi">—</div>
+      <div class="lm-unit">KG/M²</div>
+      <div class="lm-pct" id="c-bmi-note">—</div>
     </div>
-    <div class="comp-item">
-      <div class="comp-lbl">Viszeral</div>
-      <div class="comp-val" id="c-visc">—</div>
-      <div class="comp-unit">INDEX</div>
-      <div class="comp-pct" id="c-visc-note">—</div>
-    </div>
-    <div class="comp-item">
-      <div class="comp-lbl">Körperfett</div>
-      <div class="comp-val" id="c-fatkg">—</div>
-      <div class="comp-unit">KG</div>
-      <div class="comp-pct" id="c-fatkg-p">—</div>
-    </div>
-    <div class="comp-item">
-      <div class="comp-lbl">BMI</div>
-      <div class="comp-val" id="c-bmi">—</div>
-      <div class="comp-unit">KG/M²</div>
-      <div class="comp-pct" id="c-bmi-note">—</div>
-    </div>
-    <div class="comp-item">
-      <div class="comp-lbl">PWG</div>
-      <div class="comp-val" id="c-pwv">—</div>
-      <div class="comp-unit">M/S</div>
-      <div class="comp-pct" id="c-pwv-note">&nbsp;</div>
-    </div>
+  </div>
+
+  <!-- PWG mittig -->
+  <div class="lm-pwg-row">
+    <div class="lm-lbl">PWG</div>
+    <div class="lm-val" id="c-pwv">—</div>
+    <div class="lm-unit">M/S</div>
+    <div class="lm-pct" id="c-pwv-note">&nbsp;</div>
   </div>
 </div>
 
@@ -798,11 +845,6 @@
         <div class="summary-sub">Muskelmasse</div>
         <div class="delta-val good" id="d-muscle-start">—</div>
         <div class="summary-unit">KG</div>
-      </div>
-      <div class="summary-item summary-item-full">
-        <div class="summary-sub">Fettreduktion</div>
-        <div class="delta-val good" id="d-fat-pct">—</div>
-        <div class="summary-unit">%</div>
       </div>
     </div>
   </div>
@@ -1002,50 +1044,53 @@
       el.style.color = snapColor(val, prevVal, lowerIsBetter);
     }
 
-    setSnap('cur-weight',  latest.weight,   2, prev ? prev.weight : null,   true);
-    setSnap('cur-fat',     latest.fat,      1, prev ? prev.fat : null,      true);
-
-    // Muskel %
-    const musclePEl = document.getElementById('cur-muscle-p');
-    if (musclePEl && latest.muscle !== null) {
-      const pct = latest.muscle / latest.weight * 100;
-      const prevPct = (prev && prev.muscle !== null) ? prev.muscle / prev.weight * 100 : null;
-      musclePEl.textContent = pct.toFixed(1).replace('.', ',');
-      musclePEl.style.color = snapColor(pct, prevPct, false);
+    // ---- LETZTE MESSUNG unified block ----
+    function deltaColor(curr, prevVal, lowerIsBetter) {
+      if (curr === null || prevVal === null) return '#9a9aa2';
+      const diff = curr - prevVal;
+      if (Math.abs(diff) < 0.05) return '#1a7fc4';
+      return (lowerIsBetter ? diff < 0 : diff > 0) ? '#60f0a0' : '#d63b3b';
+    }
+    function setLM(valId, pctId, value, prevValue, dec, lowerIsBetter, pctFn) {
+      const el = document.getElementById(valId);
+      const pEl = pctId ? document.getElementById(pctId) : null;
+      if (!el) return;
+      if (value === null) { el.textContent = '—'; if (pEl) pEl.textContent = '—'; return; }
+      el.textContent = value.toFixed(dec).replace('.', ',');
+      const col = valId === 'c-bone' ? '#5bc8f5' : deltaColor(value, prevValue, lowerIsBetter);
+      el.style.color = col;
+      if (pEl && pctFn) { pEl.textContent = pctFn(value); pEl.style.color = col; }
     }
 
-    // ---- Koerperzusammensetzung ----
-    // Withings liefert Muskel/Wasser/Knochen in kg. Die Prozente,
-    // die die Waage anzeigt, rechnen wir hier selbst aus.
-    function setComp(idVal, idPct, value, dec, unitIsPct) {
-      const elV = document.getElementById(idVal);
-      const elP = idPct ? document.getElementById(idPct) : null;
-      if (value === null || value === undefined || isNaN(value)) {
-        elV.textContent = '—';
-        if (elP) elP.textContent = '';
-        return;
-      }
-      elV.textContent = value.toFixed(dec).replace('.', ',');
-      if (elP && unitIsPct) {
-        elP.textContent = (value / latest.weight * 100).toFixed(1).replace('.', ',') + ' %';
-      }
+    // Gewicht
+    const wEl = document.getElementById('cur-weight');
+    if (wEl) { wEl.textContent = fmt(latest.weight); wEl.style.color = deltaColor(latest.weight, prev ? prev.weight : null, true); }
+
+    // Muskel
+    setLM('c-muscle', 'c-muscle-p', latest.muscle, prev ? prev.muscle : null, 2, false,
+      v => (v / latest.weight * 100).toFixed(1).replace('.', ',') + ' %');
+
+    // Fett kg
+    setLM('c-fatkg', 'c-fatkg-p', latest.absfat, prevAbsfat, 2, true,
+      () => fmt(latest.fat, 1) + ' %');
+
+    // Knochen (immer blau)
+    setLM('c-bone', 'c-bone-p', latest.bone, prev ? prev.bone : null, 2, false,
+      v => (v / latest.weight * 100).toFixed(1).replace('.', ',') + ' %');
+
+    // Wasser
+    setLM('c-water', 'c-water-p', latest.water, prev ? prev.water : null, 2, true,
+      v => (v / latest.weight * 100).toFixed(1).replace('.', ',') + ' %');
+
+    // Viszeral
+    const viscEl = document.getElementById('c-visc');
+    if (viscEl) {
+      const v = latest.visceral;
+      if (v === null) { viscEl.textContent = '—'; }
+      else { viscEl.textContent = v.toFixed(1).replace('.', ','); viscEl.style.color = deltaColor(v, prev ? prev.visceral : null, true); }
     }
 
-    setComp('c-muscle', 'c-muscle-p', latest.muscle, 2, true);
-    setComp('c-water',  'c-water-p',  latest.water,  2, true);
-    setComp('c-bone',   'c-bone-p',   latest.bone,   2, true);
-    setComp('c-visc',   null,         latest.visceral, 1, false);
-
-    // Körperfett kg
-    const fatKgEl = document.getElementById('c-fatkg');
-    const fatKgP  = document.getElementById('c-fatkg-p');
-    if (fatKgEl && latest.absfat !== null) {
-      fatKgEl.textContent = fmt(latest.absfat);
-      fatKgEl.style.color = '#d63b3b';
-      if (fatKgP) { fatKgP.textContent = fmt(latest.fat, 1) + ' %'; fatKgP.style.color = '#d63b3b'; }
-    }
-
-    // BMI berechnen (Körpergröße 185cm -- kann später dynamisch gemacht werden)
+    // BMI
     const HEIGHT_M = 1.84;
     const bmi = latest.weight / (HEIGHT_M * HEIGHT_M);
     const bmiEl = document.getElementById('c-bmi');
@@ -1053,37 +1098,30 @@
     if (bmiEl) {
       bmiEl.textContent = bmi.toFixed(1).replace('.', ',');
       let cat = '', col = '#60f0a0';
-      if      (bmi < 18.5) { cat = 'Untergewicht';       col = '#5bc8f5'; }
-      else if (bmi < 25.0) { cat = 'Normal';              col = '#60f0a0'; }
+      if      (bmi < 18.5) { cat = 'Untergewicht';        col = '#5bc8f5'; }
+      else if (bmi < 25.0) { cat = 'Normal';               col = '#60f0a0'; }
       else if (bmi < 27.5) { cat = 'Leicht übergewichtig'; col = '#e8a020'; }
-      else if (bmi < 30.0) { cat = 'Übergewicht';         col = '#e06030'; }
-      else if (bmi < 35.0) { cat = 'Adipositas I';        col = '#e06030'; }
-      else if (bmi < 40.0) { cat = 'Adipositas II';       col = '#d63b3b'; }
-      else                 { cat = 'Adipositas III';       col = '#a02020'; }
+      else if (bmi < 30.0) { cat = 'Übergewicht';          col = '#e06030'; }
+      else if (bmi < 35.0) { cat = 'Adipositas I';         col = '#d63b3b'; }
+      else if (bmi < 40.0) { cat = 'Adipositas II';        col = '#d63b3b'; }
+      else                 { cat = 'Adipositas III';        col = '#a02020'; }
       bmiEl.style.color = col;
       if (bmiNote) { bmiNote.textContent = cat; bmiNote.style.color = col; }
     }
 
-    setComp('c-pwv',    null,         latest.pwv,    1, false);
-
-    // PWG wird nicht bei jeder Messung erfasst -- letzten bekannten Wert zeigen
+    // PWG — letzten bekannten Wert zeigen, mit Vergleich zum vorletzten
     const pwvEl = document.getElementById('c-pwv');
     const pwvNote = document.getElementById('c-pwv-note');
-    if (latest.pwv === null) {
-      const lastPwv = data.find(r => r.pwv !== null);
+    if (pwvEl) {
+      const pwvEntries = DATA.filter(r => r.pwv !== null);
+      const lastPwv = pwvEntries[0];
+      const prevPwv = pwvEntries[1] ?? null;
       if (lastPwv) {
         pwvEl.textContent = lastPwv.pwv.toFixed(1).replace('.', ',');
-        pwvEl.style.color = '#4a4a5a';
-        pwvNote.textContent = fmtDate(lastPwv.date);
-      } else {
-        pwvNote.textContent = '';
-      }
-    } else {
-      pwvNote.textContent = '';
+        pwvEl.style.color = deltaColor(lastPwv.pwv, prevPwv ? prevPwv.pwv : null, true);
+        if (pwvNote) pwvNote.textContent = lastPwv.date !== latest.date ? fmtDate(lastPwv.date) : '';
+      } else { pwvEl.textContent = '—'; }
     }
-
-    const viscNote = document.getElementById('c-visc-note');
-    if (viscNote) viscNote.textContent = latest.visceral === null ? '' : '';
 
     // MAX / MIN / AVG Gewicht seit Start
     const weightsSinceStart = data
@@ -1228,7 +1266,7 @@
     if (!START || !DATA.length) return;
     let allData = DATA.slice().sort((a,b) => a.date.localeCompare(b.date)).filter(r => r.date >= START.date);
     // Default: last 7, with every other point shown (max 7 visible)
-    const data = chartExpanded ? allData : allData.slice(-7);
+    const data = chartExpanded ? allData : allData.slice(-30);
     if (data.length < 2) return;
 
     const dpr = window.devicePixelRatio || 1;
@@ -1314,7 +1352,7 @@
     ctx.stroke();
 
     const chartHint = document.getElementById('chartToggleHint');
-    if (chartHint) chartHint.textContent = chartExpanded ? '▲ Weniger anzeigen' : '▼ Alle anzeigen';
+    if (chartHint) chartHint.textContent = chartExpanded ? '▲ 30 Tage anzeigen' : '▼ Alle anzeigen';
 
     chartPoints = [];
     validVals.forEach((v, i) => {
@@ -1353,6 +1391,54 @@
         }
       }
     });
+
+    // ---- 30-Tage-Trendlinie (lineare Regression) ----
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - 30);
+    const cutoffStr = cutoff.toISOString().slice(0, 10);
+    const trendData = validData
+      .map((r, i) => ({ i, v: validVals[i], date: r.date }))
+      .filter(p => p.date >= cutoffStr);
+
+    if (trendData.length >= 3) {
+      // Lineare Regression über die Indizes im gesamten Datensatz
+      const n = trendData.length;
+      const sumX = trendData.reduce((s, p) => s + p.i, 0);
+      const sumY = trendData.reduce((s, p) => s + p.v, 0);
+      const sumXY = trendData.reduce((s, p) => s + p.i * p.v, 0);
+      const sumX2 = trendData.reduce((s, p) => s + p.i * p.i, 0);
+      const slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
+      const intercept = (sumY - slope * sumX) / n;
+
+      const x0 = xPos(trendData[0].i);
+      const x1 = xPos(trendData[trendData.length - 1].i);
+      const y0 = yPos(slope * trendData[0].i + intercept);
+      const y1 = yPos(slope * trendData[trendData.length - 1].i + intercept);
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.setLineDash([6, 4]);
+      ctx.strokeStyle = color + 'cc';
+      ctx.lineWidth = 1.5;
+      ctx.moveTo(x0, y0);
+      ctx.lineTo(x1, y1);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Label: Trend pro Woche
+      const perDay = slope; // kg pro Datenpunkt (= pro Tag wenn täglich)
+      const perWeek = perDay * 7;
+      const sign = perWeek >= 0 ? '+' : '';
+      const trendLabel = sign + perWeek.toFixed(2).replace('.', ',') + ' kg/Wo';
+      const trendColor = (activeChart === 'm')
+        ? (slope > 0 ? '#3dd68c' : '#d63b3b')   // Muskel: hoch = gut
+        : (slope < 0 ? '#3dd68c' : '#d63b3b');  // Gewicht/Fett: runter = gut
+      ctx.fillStyle = trendColor;
+      ctx.font = 'bold 9px DM Mono, monospace';
+      ctx.textAlign = 'right';
+      ctx.fillText('Trend 30T: ' + trendLabel, x1 - 4, y1 - 8);
+      ctx.restore();
+    }
 
     const startIdx = validData.findIndex(r => r.date === START.date);
     if (startIdx >= 0) {
