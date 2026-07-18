@@ -1303,8 +1303,8 @@
     if (validVals.length < 2) return;
 
     const pad = { top: 20, bottom: 28, left: 8, right: 8 };
-    const dataMin = goal !== null ? Math.min(...validVals, goal) : Math.min(...validVals);
-    const dataMax = goal !== null ? Math.max(...validVals, goal) : Math.max(...validVals);
+    const dataMin = Math.min(...validVals);
+    const dataMax = Math.max(...validVals);
     const dataPad = Math.max((dataMax - dataMin) * 0.25, 0.2);
     const minV = dataMin - dataPad;
     const maxV = dataMax + dataPad;
@@ -1313,21 +1313,7 @@
     function xPos(i) { return pad.left + (i / (validVals.length - 1)) * (W - pad.left - pad.right); }
     function yPos(v) { return pad.top + (1 - (v - minV) / range) * (H - pad.top - pad.bottom); }
 
-    // Goal line (nur wenn Zielwert definiert)
-    if (goal !== null) {
-      const gy = yPos(goal);
-      ctx.beginPath();
-      ctx.setLineDash([4, 4]);
-      ctx.strokeStyle = color + '40';
-      ctx.lineWidth = 1;
-      ctx.moveTo(pad.left, gy);
-      ctx.lineTo(W - pad.right, gy);
-      ctx.stroke();
-      ctx.setLineDash([]);
-      ctx.fillStyle = color + '60';
-      ctx.font = '9px DM Mono, monospace';
-      ctx.fillText('Ziel ' + goal + ' kg', W - pad.right - 60, gy - 4);
-    }
+    // Zielwert absichtlich nicht als Linie — verzerrt die Skalierung
 
     // Area fill
     const grad = ctx.createLinearGradient(0, pad.top, 0, H - pad.bottom);
