@@ -1160,8 +1160,10 @@
     }
 
     const fpEl = document.getElementById('d-fat-pct');
-    fpEl.textContent = (fatPctChange >= 0 ? '+' : '') + fmt(fatPctChange, 1) + '%';
-    fpEl.className = 'delta-val ' + (fatPctChange <= 0 ? 'good' : 'bad');
+    if (fpEl) {
+      fpEl.textContent = (fatPctChange >= 0 ? '+' : '') + fmt(fatPctChange, 1) + '%';
+      fpEl.className = 'delta-val ' + (fatPctChange <= 0 ? 'good' : 'bad');
+    }
 
     const gwEl = document.getElementById('d-weight-goal');
     const gwVal = latest.weight - GOAL.weight;
