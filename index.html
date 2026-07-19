@@ -737,7 +737,7 @@
 
 <header>
   <h1>Body Tracking</h1>
-  <p>Ziel: 80 kg · 10% · 8,0 kg Fett</p>
+  <p>ZWISCHENZIEL: 90 KG · BMI &lt; 27,5 · 14,0 KG FETT</p>
   <button class="refresh-btn" onclick="manualSync()" title="Daten aktualisieren">
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
       <path d="M23 4v6h-6"/>
@@ -853,11 +853,16 @@
   <!-- Block: BIS ZIEL -->
   <div class="summary-block">
     <div class="summary-label">BIS ZIEL</div>
-    <div class="summary-grid two-col">
+    <div class="summary-grid">
       <div class="summary-item">
         <div class="summary-sub">Gewicht</div>
         <div class="delta-val" id="d-weight-goal">—</div>
         <div class="summary-unit">KG</div>
+      </div>
+      <div class="summary-item">
+        <div class="summary-sub">BMI</div>
+        <div class="delta-val" id="d-bmi-goal">—</div>
+        <div class="summary-unit">PUNKTE</div>
       </div>
       <div class="summary-item">
         <div class="summary-sub">Fett</div>
@@ -868,6 +873,8 @@
     <div style="margin-top:16px; padding-top:14px; border-top:1px solid var(--border);">
       <div class="progress-label"><span>Gewicht <span class="pb-range" id="pb-w-range">—</span></span><span id="pb-w-lbl">—</span></div>
       <div class="progress-bar-bg"><div class="progress-bar-fill bar-weight" id="pb-weight" style="width:0%"></div></div>
+      <div class="progress-label" style="margin-top:10px"><span>BMI <span class="pb-range" id="pb-bmi-range">—</span></span><span id="pb-bmi-lbl">—</span></div>
+      <div class="progress-bar-bg"><div class="progress-bar-fill bar-weight" id="pb-bmi" style="width:0%"></div></div>
       <div class="progress-label" style="margin-top:10px"><span>Fett KG <span class="pb-range" id="pb-a-range">—</span></span><span id="pb-a-lbl">—</span></div>
       <div class="progress-bar-bg" style="margin-bottom:0"><div class="progress-bar-fill bar-absfat" id="pb-absfat" style="width:0%"></div></div>
     </div>
@@ -931,7 +938,7 @@
   const SUPABASE_KEY = 'sb_publishable_ho5Ih_MBjebHsY2qztgS3Q_f4qEX2y4';
   // ⬆⬆⬆ ------------------------------------------ ⬆⬆⬆
 
-  const GOAL = { weight: 80, fat: 10, absfat: 8 };
+  const GOAL = { weight: 90, fat: 10, absfat: 14, bmi: 27.5 };
 
   // Hoechstwert -- ab hier rechnet "SEIT START"
   const START_DATE = '2025-12-29';
@@ -1168,32 +1175,48 @@
 
     const gwEl = document.getElementById('d-weight-goal');
     const gwVal = latest.weight - GOAL.weight;
-    gwEl.textContent = (gwVal > 0 ? '−' : '✓ ') + (gwVal > 0 ? fmt(gwVal) : '0,00');
+    gwEl.textContent = (gwVal > 0 ? '−' : '✓ ') + fmt(Math.abs(gwVal));
     gwEl.className = 'delta-val ' + (gwVal <= 0 ? 'good' : 'neutral');
+
+    // BMI Delta
+    const HEIGHT_M2 = 1.84;
+    const curBmi = latest.weight / (HEIGHT_M2 * HEIGHT_M2);
+    const bmgEl = document.getElementById('d-bmi-goal');
+    const bmiDelta = curBmi - GOAL.bmi;
+    if (bmgEl) {
+      bmgEl.textContent = (bmiDelta > 0 ? '−' : '✓ ') + Math.abs(bmiDelta).toFixed(1).replace('.', ',');
+      bmgEl.className = 'delta-val ' + (bmiDelta <= 0 ? 'good' : 'neutral');
+    }
 
     const gaEl = document.getElementById('d-absfat-goal');
     const gaVal = latestAbsfat - GOAL.absfat;
-    gaEl.textContent = (gaVal > 0 ? '−' : '✓ ') + (gaVal > 0 ? fmt(gaVal) : '0,00');
+    gaEl.textContent = (gaVal > 0 ? '−' : '✓ ') + fmt(Math.abs(gaVal));
     gaEl.className = 'delta-val ' + (gaVal <= 0 ? 'good' : 'neutral');
 
-
-    // Progress bars (% of journey from start to goal)
+    // Progress bars
     function barPct(cur, start, goal) {
       const total = Math.abs(start - goal);
       const done = Math.abs(cur - start);
       return Math.min(100, Math.max(0, (done / total * 100)));
     }
 
-    const pw = barPct(latest.weight, START.weight, GOAL.weight);
-    const pf = barPct(latest.fat, START.fat, GOAL.fat);
-    const pa = barPct(latestAbsfat, START.absfat, GOAL.absfat);
+    const startBmi = START.weight / (HEIGHT_M2 * HEIGHT_M2);
+    const pw  = barPct(latest.weight, START.weight, GOAL.weight);
+    const pb  = barPct(curBmi, startBmi, GOAL.bmi);
+    const pa  = barPct(latestAbsfat, START.absfat, GOAL.absfat);
 
     document.getElementById('pb-weight').style.width = pw + '%';
+    document.getElementById('pb-bmi').style.width    = pb + '%';
     document.getElementById('pb-absfat').style.width = pa + '%';
-    document.getElementById('pb-w-lbl').textContent = fmt(pw,0) + '%';
-    document.getElementById('pb-a-lbl').textContent = fmt(pa,0) + '%';
+
+    document.getElementById('pb-w-lbl').textContent   = Math.round(pw) + '%';
+    document.getElementById('pb-bmi-lbl').textContent = Math.round(pb) + '%';
+    document.getElementById('pb-a-lbl').textContent   = Math.round(pa) + '%';
+
     document.getElementById('pb-w-range').textContent =
       fmt(START.weight) + ' → ' + GOAL.weight + ' kg';
+    document.getElementById('pb-bmi-range').textContent =
+      startBmi.toFixed(1).replace('.', ',') + ' → ' + GOAL.bmi.toString().replace('.', ',');
     document.getElementById('pb-a-range').textContent =
       fmt(START.absfat) + ' → ' + GOAL.absfat + ' kg';
 
