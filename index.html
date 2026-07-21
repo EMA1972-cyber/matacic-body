@@ -1334,7 +1334,7 @@
 
     if (validVals.length < 2) return;
 
-    const pad = { top: 20, bottom: 28, left: 8, right: 8 };
+    const pad = { top: 38, bottom: 28, left: 8, right: 8 };
     const dataMin = Math.min(...validVals);
     const dataMax = Math.max(...validVals);
     const dataPad = Math.max((dataMax - dataMin) * 0.25, 0.2);
@@ -1456,7 +1456,7 @@
       ctx.fillStyle = trendColor;
       ctx.font = 'bold 10px DM Mono, monospace';
       ctx.textAlign = 'center';
-      ctx.fillText('Trend 30T: ' + trendLabel, W / 2, pad.top + 14);
+      ctx.fillText('Trend 30T: ' + trendLabel, W / 2, 12);
       ctx.restore();
     }
 
@@ -1483,7 +1483,7 @@
         ctx.fillStyle = col;
         ctx.font = 'bold 10px DM Mono, monospace';
         ctx.textAlign = 'center';
-        ctx.fillText(avgTxt, W / 2, pad.top + 28);
+        ctx.fillText(avgTxt, W / 2, 26);
         ctx.restore();
       }
     }
