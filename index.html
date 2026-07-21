@@ -1455,9 +1455,37 @@
         : (slope < 0 ? '#3dd68c' : '#d63b3b');  // Gewicht/Fett: runter = gut
       ctx.fillStyle = trendColor;
       ctx.font = 'bold 10px DM Mono, monospace';
-      ctx.textAlign = 'right';
-      ctx.fillText('Trend 30T: ' + trendLabel, W - pad.right - 4, pad.top + 14);
+      ctx.textAlign = 'center';
+      ctx.fillText('Trend 30T: ' + trendLabel, W / 2, pad.top + 14);
       ctx.restore();
+    }
+
+    // ---- Ø 7 Tage vs. Vorwoche (mittig, unter dem 30T-Trend) ----
+    {
+      const avgColorGood = '#3dd68c', avgColorBad = '#d63b3b', avgColorNeutral = '#5bc8f5';
+      const vv = validVals; // bereits nach aktivem Tab gefiltert (weight/muscle/absfat)
+      if (vv.length >= 8) {
+        const last7 = vv.slice(-7);
+        const prev7 = vv.slice(-14, -7);
+        const avg = arr => arr.reduce((s, x) => s + x, 0) / arr.length;
+        const avgLast = avg(last7);
+        const diff = avgLast - avg(prev7);
+        const absdiff = Math.abs(diff);
+        let col;
+        if (absdiff < 0.05) col = avgColorNeutral;
+        else if (activeChart === 'm') col = diff > 0 ? avgColorGood : avgColorBad; // Muskel: hoch = gut
+        else col = diff < 0 ? avgColorGood : avgColorBad;                          // Gewicht/Fett: runter = gut
+        const arrow = diff < -0.005 ? '▼ ' : diff > 0.005 ? '▲ ' : '';
+        const sign = diff >= 0 ? '+' : '−';
+        const diffTxt = arrow + sign + absdiff.toFixed(2).replace('.', ',') + ' kg';
+        const avgTxt = 'Ø 7T: ' + avgLast.toFixed(2).replace('.', ',') + ' kg  ' + diffTxt;
+        ctx.save();
+        ctx.fillStyle = col;
+        ctx.font = 'bold 10px DM Mono, monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(avgTxt, W / 2, pad.top + 28);
+        ctx.restore();
+      }
     }
 
     const startIdx = validData.findIndex(r => r.date === START.date);
