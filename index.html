@@ -194,6 +194,10 @@
     padding-top: 12px;
     border-top: 1px solid var(--border);
   }
+  .lm-grid-4 { grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  .lm-grid-4 .lm-val { font-size: 1.15rem; }
+  .lm-grid-4 .lm-lbl { font-size: 0.5rem; letter-spacing: 0.05em; }
+  .lm-grid-4 .lm-pct { font-size: 0.7rem; }
   .lm-pwg-row {
     display: flex;
     flex-direction: column;
@@ -758,8 +762,8 @@
     <div class="lm-unit">KG</div>
   </div>
 
-  <!-- 3er Grid: Muskel / Fett / Knochen -->
-  <div class="lm-grid">
+  <!-- 4er Grid: Muskel / Fett / Knochen / Wasser (alle in KG) -->
+  <div class="lm-grid lm-grid-4">
     <div class="lm-item">
       <div class="lm-lbl">MUSKEL</div>
       <div class="lm-val" id="c-muscle">—</div>
@@ -778,16 +782,16 @@
       <div class="lm-unit">KG</div>
       <div class="lm-pct" id="c-bone-p">—</div>
     </div>
-  </div>
-
-  <!-- 3er Grid: Wasser / Viszeral / BMI -->
-  <div class="lm-grid lm-grid-sep">
     <div class="lm-item">
       <div class="lm-lbl">WASSER</div>
       <div class="lm-val" id="c-water">—</div>
       <div class="lm-unit">KG</div>
       <div class="lm-pct" id="c-water-p">—</div>
     </div>
+  </div>
+
+  <!-- 3er Grid: Viszeral / BMI / PWG (Sonder-Einheiten) -->
+  <div class="lm-grid lm-grid-sep">
     <div class="lm-item">
       <div class="lm-lbl">VISZERAL</div>
       <div class="lm-val" id="c-visc">—</div>
@@ -800,14 +804,12 @@
       <div class="lm-unit">KG/M²</div>
       <div class="lm-pct" id="c-bmi-note">—</div>
     </div>
-  </div>
-
-  <!-- PWG mittig -->
-  <div class="lm-pwg-row">
-    <div class="lm-lbl">PWG</div>
-    <div class="lm-val" id="c-pwv">—</div>
-    <div class="lm-unit">M/S</div>
-    <div class="lm-pct" id="c-pwv-note">&nbsp;</div>
+    <div class="lm-item">
+      <div class="lm-lbl">PWG</div>
+      <div class="lm-val" id="c-pwv">—</div>
+      <div class="lm-unit">M/S</div>
+      <div class="lm-pct" id="c-pwv-note">&nbsp;</div>
+    </div>
   </div>
 </div>
 
@@ -1073,7 +1075,7 @@
       if (!el) return;
       if (value === null) { el.textContent = '—'; if (pEl) pEl.textContent = '—'; return; }
       el.textContent = value.toFixed(dec).replace('.', ',');
-      const col = valId === 'c-bone' ? '#5bc8f5' : deltaColor(value, prevValue, lowerIsBetter);
+      const col = (valId === 'c-bone' || valId === 'c-water') ? '#5bc8f5' : deltaColor(value, prevValue, lowerIsBetter);
       el.style.color = col;
       if (pEl && pctFn) { pEl.textContent = pctFn(value); pEl.style.color = col; }
     }
