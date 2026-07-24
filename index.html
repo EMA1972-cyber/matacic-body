@@ -1609,7 +1609,7 @@
     if (!rows.length) return;
 
     const dpr = window.devicePixelRatio || 1;
-    const H = 205;
+    const H = 224;
     canvas.width = canvas.offsetWidth * dpr;
     canvas.height = H * dpr;
     ctx.scale(dpr, dpr);
@@ -1617,25 +1617,25 @@
     ctx.clearRect(0, 0, W, H);
 
     const COL_KCAL = '#f0705a', COL_DRINK = '#5bc8f5', COL_MUTED = '#7a7a85';
+    const COL_GOOD = '#3dd68c', COL_BAD = '#d63b3b';
+    const STEP_GOAL = 10000;
     const padX = 8;
     const slot = (W - padX * 2) / rows.length;
     const barW = Math.min(slot * 0.52, 32);
 
-    // Nur getrackte Tage zaehlen (kcal_in = 0 heisst: nicht erfasst)
     const tracked = rows.filter(r => Number(r.kcal_in) > 0);
     const kcalMax = Math.max(2200, ...tracked.map(r => Number(r.kcal_in)));
 
-    const base = 160, barMaxH = 88;
+    const base = 168, barMaxH = 84;
 
-    // Getraenke: eigene Skala, schwebt oberhalb der Balken
     const mls = rows.map(r => Number(r.drinks_ml)).filter(v => v > 0);
     const dMin = Math.min(...mls), dMax = Math.max(...mls);
     const span = Math.max(dMax - dMin, 800);
     const lo = dMin - span * 0.35, hi = dMax + span * 0.35;
-    const yTop = 44, yBot = 116;
+    const yTop = 56, yBot = 124;
     const yFor = ml => yBot - (ml - lo) / (hi - lo) * (yBot - yTop);
 
-    // --- Zwei zentrierte Kopfzeilen ---
+    // --- Drei zentrierte Kopfzeilen ---
     ctx.textAlign = 'center';
     if (tracked.length) {
       const avg = tracked.reduce((s,r) => s + Number(r.kcal_in), 0) / tracked.length;
@@ -1649,6 +1649,13 @@
       ctx.font = 'bold 10px DM Mono, monospace';
       ctx.fillText('Ø ' + (avgMl/1000).toFixed(2).replace('.', ',') + ' L Getränke', W/2, 26);
     }
+    const stepRows = rows.filter(r => Number(r.steps) > 0);
+    if (stepRows.length) {
+      const avgSt = stepRows.reduce((s,r) => s + Number(r.steps), 0) / stepRows.length;
+      ctx.fillStyle = avgSt >= STEP_GOAL ? COL_GOOD : COL_BAD;
+      ctx.font = 'bold 10px DM Mono, monospace';
+      ctx.fillText('Ø ' + Math.round(avgSt).toLocaleString('de-DE') + ' Schritte', W/2, 40);
+    }
 
     // --- Balken (kcal) ---
     rows.forEach((r, i) => {
@@ -1660,7 +1667,6 @@
         ctx.beginPath();
         ctx.roundRect(cx - barW/2, base - h, barW, h, 4);
         ctx.fill();
-        // Wert im Balken, damit die Linie nicht kollidiert
         ctx.fillStyle = 'rgba(0,0,0,0.75)';
         ctx.font = 'bold 9px DM Mono, monospace';
         ctx.fillText(kcal.toLocaleString('de-DE'), cx, base - h + 11);
@@ -1692,23 +1698,40 @@
       ctx.fillText((p.ml/1000).toFixed(1).replace('.', ',') + ' L', p.x, p.y - 7);
     });
 
-    // --- Tages-Labels ---
+    // --- Grundlinie ---
+    ctx.strokeStyle = 'rgba(255,255,255,0.10)';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(padX, base + 0.5); ctx.lineTo(W - padX, base + 0.5); ctx.stroke();
+
+    // --- Tages-Labels + Schritte-Streifen ---
+    const stripW = Math.min(slot * 0.72, 42), stripH = 6, stripY = 200;
     rows.forEach((r, i) => {
       const cx = padX + slot * i + slot / 2;
       const d = new Date(r.day + 'T12:00:00');
       const wd = ['So','Mo','Di','Mi','Do','Fr','Sa'][d.getDay()];
       ctx.fillStyle = COL_MUTED;
       ctx.font = '9px DM Mono, monospace';
-      ctx.fillText(wd, cx, base + 16);
+      ctx.fillText(wd, cx, base + 14);
       ctx.font = '8px DM Mono, monospace';
       ctx.fillText(String(d.getDate()).padStart(2,'0') + '.'
-                 + String(d.getMonth()+1).padStart(2,'0'), cx, base + 27);
-    });
+                 + String(d.getMonth()+1).padStart(2,'0'), cx, base + 24);
 
-    // --- Grundlinie ---
-    ctx.strokeStyle = 'rgba(255,255,255,0.10)';
-    ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(padX, base + 0.5); ctx.lineTo(W - padX, base + 0.5); ctx.stroke();
+      const st = Number(r.steps) || 0;
+      // Spur
+      ctx.fillStyle = 'rgba(255,255,255,0.07)';
+      ctx.beginPath();
+      ctx.roundRect(cx - stripW/2, stripY, stripW, stripH, 3);
+      ctx.fill();
+      if (st > 0) {
+        const frac = Math.min(st / STEP_GOAL, 1);
+        ctx.fillStyle = st >= STEP_GOAL ? COL_GOOD : COL_BAD;
+        ctx.beginPath();
+        ctx.roundRect(cx - stripW/2, stripY, Math.max(3, stripW * frac), stripH, 3);
+        ctx.fill();
+        ctx.font = 'bold 8px DM Mono, monospace';
+        ctx.fillText(st.toLocaleString('de-DE'), cx, stripY + 17);
+      }
+    });
   }
 
   window.addEventListener('resize', function () { drawChart(); drawBilanz(); });
