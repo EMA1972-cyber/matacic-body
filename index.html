@@ -1609,7 +1609,7 @@
     if (!rows.length) return;
 
     const dpr = window.devicePixelRatio || 1;
-    const H = 250;
+    const H = 205;
     canvas.width = canvas.offsetWidth * dpr;
     canvas.height = H * dpr;
     ctx.scale(dpr, dpr);
@@ -1619,84 +1619,96 @@
     const COL_KCAL = '#f0705a', COL_DRINK = '#5bc8f5', COL_MUTED = '#7a7a85';
     const padX = 8;
     const slot = (W - padX * 2) / rows.length;
-    const barW = Math.min(slot * 0.56, 34);
+    const barW = Math.min(slot * 0.52, 32);
 
     // Nur getrackte Tage zaehlen (kcal_in = 0 heisst: nicht erfasst)
     const tracked = rows.filter(r => Number(r.kcal_in) > 0);
     const kcalMax = Math.max(2200, ...tracked.map(r => Number(r.kcal_in)));
-    const mlMax   = Math.max(4000, ...rows.map(r => Number(r.drinks_ml)));
 
-    const kcalBase = 152, kcalH = 88;
-    const mlBase   = 224, mlH   = 40;
+    const base = 160, barMaxH = 88;
 
-    // --- Ø-Zeile kcal ---
+    // Getraenke: eigene Skala, schwebt oberhalb der Balken
+    const mls = rows.map(r => Number(r.drinks_ml)).filter(v => v > 0);
+    const dMin = Math.min(...mls), dMax = Math.max(...mls);
+    const span = Math.max(dMax - dMin, 800);
+    const lo = dMin - span * 0.35, hi = dMax + span * 0.35;
+    const yTop = 44, yBot = 116;
+    const yFor = ml => yBot - (ml - lo) / (hi - lo) * (yBot - yTop);
+
+    // --- Zwei zentrierte Kopfzeilen ---
+    ctx.textAlign = 'center';
     if (tracked.length) {
       const avg = tracked.reduce((s,r) => s + Number(r.kcal_in), 0) / tracked.length;
       ctx.fillStyle = COL_KCAL;
       ctx.font = 'bold 10px DM Mono, monospace';
-      ctx.textAlign = 'center';
       ctx.fillText('Ø ' + Math.round(avg).toLocaleString('de-DE') + ' kcal', W/2, 12);
     }
+    if (mls.length) {
+      const avgMl = mls.reduce((s,v) => s + v, 0) / mls.length;
+      ctx.fillStyle = COL_DRINK;
+      ctx.font = 'bold 10px DM Mono, monospace';
+      ctx.fillText('Ø ' + (avgMl/1000).toFixed(2).replace('.', ',') + ' L Getränke', W/2, 26);
+    }
 
+    // --- Balken (kcal) ---
     rows.forEach((r, i) => {
       const cx = padX + slot * i + slot / 2;
-      const kcal = Number(r.kcal_in), ml = Number(r.drinks_ml);
-
-      // --- kcal-Balken ---
+      const kcal = Number(r.kcal_in);
       if (kcal > 0) {
-        const h = Math.max(2, kcal / kcalMax * kcalH);
+        const h = Math.max(3, kcal / kcalMax * barMaxH);
         ctx.fillStyle = COL_KCAL;
         ctx.beginPath();
-        ctx.roundRect(cx - barW/2, kcalBase - h, barW, h, 4);
+        ctx.roundRect(cx - barW/2, base - h, barW, h, 4);
         ctx.fill();
-        ctx.fillStyle = COL_KCAL;
+        // Wert im Balken, damit die Linie nicht kollidiert
+        ctx.fillStyle = 'rgba(0,0,0,0.75)';
         ctx.font = 'bold 9px DM Mono, monospace';
-        ctx.textAlign = 'center';
-        ctx.fillText(kcal.toLocaleString('de-DE'), cx, kcalBase - h - 5);
+        ctx.fillText(kcal.toLocaleString('de-DE'), cx, base - h + 11);
       } else {
         ctx.fillStyle = COL_MUTED;
         ctx.font = '10px DM Mono, monospace';
-        ctx.textAlign = 'center';
-        ctx.fillText('—', cx, kcalBase - 4);
+        ctx.fillText('—', cx, base - 4);
       }
+    });
 
-      // --- Getraenke-Balken ---
-      if (ml > 0) {
-        const h = Math.max(2, ml / mlMax * mlH);
-        ctx.fillStyle = COL_DRINK;
-        ctx.beginPath();
-        ctx.roundRect(cx - barW/2, mlBase - h, barW, h, 3);
-        ctx.fill();
-        ctx.fillStyle = COL_DRINK;
-        ctx.font = 'bold 9px DM Mono, monospace';
-        ctx.fillText((ml/1000).toFixed(1).replace('.', ','), cx, mlBase - h - 5);
-      }
+    // --- Linie (Getraenke) ---
+    const pts = rows.map((r, i) => {
+      const ml = Number(r.drinks_ml);
+      return ml > 0 ? { x: padX + slot * i + slot / 2, y: yFor(ml), ml } : null;
+    }).filter(Boolean);
 
-      // --- Tages-Label ---
+    if (pts.length > 1) {
+      ctx.strokeStyle = COL_DRINK;
+      ctx.lineWidth = 2;
+      ctx.lineJoin = 'round';
+      ctx.beginPath();
+      pts.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y));
+      ctx.stroke();
+    }
+    pts.forEach(p => {
+      ctx.fillStyle = COL_DRINK;
+      ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, Math.PI*2); ctx.fill();
+      ctx.font = 'bold 8px DM Mono, monospace';
+      ctx.fillText((p.ml/1000).toFixed(1).replace('.', ',') + ' L', p.x, p.y - 7);
+    });
+
+    // --- Tages-Labels ---
+    rows.forEach((r, i) => {
+      const cx = padX + slot * i + slot / 2;
       const d = new Date(r.day + 'T12:00:00');
       const wd = ['So','Mo','Di','Mi','Do','Fr','Sa'][d.getDay()];
       ctx.fillStyle = COL_MUTED;
       ctx.font = '9px DM Mono, monospace';
-      ctx.fillText(wd, cx, mlBase + 14);
+      ctx.fillText(wd, cx, base + 16);
       ctx.font = '8px DM Mono, monospace';
       ctx.fillText(String(d.getDate()).padStart(2,'0') + '.'
-                 + String(d.getMonth()+1).padStart(2,'0'), cx, mlBase + 24);
+                 + String(d.getMonth()+1).padStart(2,'0'), cx, base + 27);
     });
 
-    // --- Ø-Zeile Getraenke ---
-    const withMl = rows.filter(r => Number(r.drinks_ml) > 0);
-    if (withMl.length) {
-      const avgMl = withMl.reduce((s,r) => s + Number(r.drinks_ml), 0) / withMl.length;
-      ctx.fillStyle = COL_DRINK;
-      ctx.font = 'bold 10px DM Mono, monospace';
-      ctx.textAlign = 'center';
-      ctx.fillText('Ø ' + (avgMl/1000).toFixed(2).replace('.', ',') + ' L Getränke', W/2, 176);
-    }
-
-    // --- Trennlinie ---
-    ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+    // --- Grundlinie ---
+    ctx.strokeStyle = 'rgba(255,255,255,0.10)';
     ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(padX, 163); ctx.lineTo(W - padX, 163); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(padX, base + 0.5); ctx.lineTo(W - padX, base + 0.5); ctx.stroke();
   }
 
   window.addEventListener('resize', function () { drawChart(); drawBilanz(); });
