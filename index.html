@@ -1609,39 +1609,46 @@
     if (!rows.length) return;
 
     const dpr = window.devicePixelRatio || 1;
-    const H = 224;
+    const H = 238;
     canvas.width = canvas.offsetWidth * dpr;
     canvas.height = H * dpr;
     ctx.scale(dpr, dpr);
     const W = canvas.offsetWidth;
     ctx.clearRect(0, 0, W, H);
 
-    const COL_KCAL = '#f0705a', COL_DRINK = '#5bc8f5', COL_MUTED = '#7a7a85';
+    const COL_DRINK = '#5bc8f5', COL_MUTED = '#7a7a85';
     const COL_GOOD = '#3dd68c', COL_BAD = '#d63b3b';
     const STEP_GOAL = 10000;
+    const BASE_KCAL = 2019;          // Tagesbedarf laut Fddb-Profil
     const padX = 8;
     const slot = (W - padX * 2) / rows.length;
     const barW = Math.min(slot * 0.52, 32);
 
-    const tracked = rows.filter(r => Number(r.kcal_in) > 0);
-    const kcalMax = Math.max(2200, ...tracked.map(r => Number(r.kcal_in)));
+    // Delta nach Fddb-Logik: Grundumsatz + Sport - Aufnahme
+    const deltaOf = r => (Number(r.kcal_in) > 0 && r.kcal_out !== null)
+      ? BASE_KCAL + Number(r.kcal_out) - Number(r.kcal_in) : null;
+    const deltas = rows.map(deltaOf);
+    const valid  = deltas.filter(v => v !== null);
+    const dAbsMax = Math.max(600, ...valid.map(Math.abs));
 
-    const base = 168, barMaxH = 84;
+    const y0 = 146, maxBarH = 32;    // Nulllinie + max. Balkenhoehe
 
+    // Getraenke: eigene Skala oberhalb
     const mls = rows.map(r => Number(r.drinks_ml)).filter(v => v > 0);
     const dMin = Math.min(...mls), dMax = Math.max(...mls);
     const span = Math.max(dMax - dMin, 800);
     const lo = dMin - span * 0.35, hi = dMax + span * 0.35;
-    const yTop = 56, yBot = 124;
+    const yTop = 56, yBot = 92;
     const yFor = ml => yBot - (ml - lo) / (hi - lo) * (yBot - yTop);
 
     // --- Drei zentrierte Kopfzeilen ---
     ctx.textAlign = 'center';
-    if (tracked.length) {
-      const avg = tracked.reduce((s,r) => s + Number(r.kcal_in), 0) / tracked.length;
-      ctx.fillStyle = COL_KCAL;
+    if (valid.length) {
+      const avg = valid.reduce((s,v) => s + v, 0) / valid.length;
+      ctx.fillStyle = avg >= 0 ? COL_GOOD : COL_BAD;
       ctx.font = 'bold 10px DM Mono, monospace';
-      ctx.fillText('Ø ' + Math.round(avg).toLocaleString('de-DE') + ' kcal', W/2, 12);
+      ctx.fillText('Ø ' + (avg >= 0 ? '+' : '−')
+        + Math.round(Math.abs(avg)).toLocaleString('de-DE') + ' kcal', W/2, 12);
     }
     if (mls.length) {
       const avgMl = mls.reduce((s,v) => s + v, 0) / mls.length;
@@ -1657,24 +1664,30 @@
       ctx.fillText('Ø ' + Math.round(avgSt).toLocaleString('de-DE') + ' Schritte', W/2, 40);
     }
 
-    // --- Balken (kcal) ---
+    // --- Nulllinie ---
+    ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(padX, y0 + 0.5); ctx.lineTo(W - padX, y0 + 0.5); ctx.stroke();
+
+    // --- Delta-Balken ---
     rows.forEach((r, i) => {
       const cx = padX + slot * i + slot / 2;
-      const kcal = Number(r.kcal_in);
-      if (kcal > 0) {
-        const h = Math.max(3, kcal / kcalMax * barMaxH);
-        ctx.fillStyle = COL_KCAL;
-        ctx.beginPath();
-        ctx.roundRect(cx - barW/2, base - h, barW, h, 4);
-        ctx.fill();
-        ctx.fillStyle = 'rgba(0,0,0,0.75)';
-        ctx.font = 'bold 9px DM Mono, monospace';
-        ctx.fillText(kcal.toLocaleString('de-DE'), cx, base - h + 11);
-      } else {
+      const dv = deltas[i];
+      if (dv === null) {
         ctx.fillStyle = COL_MUTED;
         ctx.font = '10px DM Mono, monospace';
-        ctx.fillText('—', cx, base - 4);
+        ctx.fillText('—', cx, y0 - 5);
+        return;
       }
+      const h = Math.max(3, Math.abs(dv) / dAbsMax * maxBarH);
+      const up = dv >= 0;
+      ctx.fillStyle = up ? COL_GOOD : COL_BAD;
+      ctx.beginPath();
+      ctx.roundRect(cx - barW/2, up ? y0 - h : y0, barW, h, 3);
+      ctx.fill();
+      ctx.font = 'bold 9px DM Mono, monospace';
+      ctx.fillText((up ? '+' : '−') + Math.abs(dv).toLocaleString('de-DE'),
+                   cx, up ? y0 - h - 5 : y0 + h + 11);
     });
 
     // --- Linie (Getraenke) ---
@@ -1698,26 +1711,20 @@
       ctx.fillText((p.ml/1000).toFixed(1).replace('.', ',') + ' L', p.x, p.y - 7);
     });
 
-    // --- Grundlinie ---
-    ctx.strokeStyle = 'rgba(255,255,255,0.10)';
-    ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(padX, base + 0.5); ctx.lineTo(W - padX, base + 0.5); ctx.stroke();
-
     // --- Tages-Labels + Schritte-Streifen ---
-    const stripW = Math.min(slot * 0.72, 42), stripH = 6, stripY = 200;
+    const stripW = Math.min(slot * 0.72, 42), stripH = 6, stripY = 214;
     rows.forEach((r, i) => {
       const cx = padX + slot * i + slot / 2;
       const d = new Date(r.day + 'T12:00:00');
       const wd = ['So','Mo','Di','Mi','Do','Fr','Sa'][d.getDay()];
       ctx.fillStyle = COL_MUTED;
       ctx.font = '9px DM Mono, monospace';
-      ctx.fillText(wd, cx, base + 14);
+      ctx.fillText(wd, cx, 194);
       ctx.font = '8px DM Mono, monospace';
       ctx.fillText(String(d.getDate()).padStart(2,'0') + '.'
-                 + String(d.getMonth()+1).padStart(2,'0'), cx, base + 24);
+                 + String(d.getMonth()+1).padStart(2,'0'), cx, 204);
 
       const st = Number(r.steps) || 0;
-      // Spur
       ctx.fillStyle = 'rgba(255,255,255,0.07)';
       ctx.beginPath();
       ctx.roundRect(cx - stripW/2, stripY, stripW, stripH, 3);
