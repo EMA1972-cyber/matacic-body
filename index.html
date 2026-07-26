@@ -1625,7 +1625,7 @@
     const barW = Math.min(slot * 0.52, 32);
 
     // Delta nach Fddb-Logik: Grundumsatz + Sport - Aufnahme
-    const deltaOf = r => (Number(r.kcal_in) > 0 && r.kcal_out !== null)
+    const deltaOf = r => (Number(r.kcal_in) > 0 && (r.kcal_google !== null || r.kcal_apple !== null))
       ? BASE_KCAL + Number(r.kcal_out) - Number(r.kcal_in) : null;
     const deltas = rows.map(deltaOf);
     const valid  = deltas.filter(v => v !== null);
@@ -1656,7 +1656,7 @@
       ctx.font = 'bold 10px DM Mono, monospace';
       ctx.fillText('Ø ' + (avgMl/1000).toFixed(2).replace('.', ',') + ' L Getränke', W/2, 26);
     }
-    const stepRows = rows.filter(r => Number(r.steps) > 0);
+    const stepRows = rows.filter(r => (r.steps_google !== null || r.steps_apple !== null) && Number(r.steps) > 0);
     if (stepRows.length) {
       const avgSt = stepRows.reduce((s,r) => s + Number(r.steps), 0) / stepRows.length;
       ctx.fillStyle = avgSt >= STEP_GOAL ? COL_GOOD : COL_BAD;
@@ -1724,7 +1724,8 @@
       ctx.fillText(String(d.getDate()).padStart(2,'0') + '.'
                  + String(d.getMonth()+1).padStart(2,'0'), cx, 204);
 
-      const st = Number(r.steps) || 0;
+      const hasSteps = r.steps_google !== null || r.steps_apple !== null;
+      const st = hasSteps ? (Number(r.steps) || 0) : 0;
       ctx.fillStyle = 'rgba(255,255,255,0.07)';
       ctx.beginPath();
       ctx.roundRect(cx - stripW/2, stripY, stripW, stripH, 3);
