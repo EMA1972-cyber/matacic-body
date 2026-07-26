@@ -1523,6 +1523,7 @@
 
   const SYNC_URL = 'https://atzcaxahulifnuvwxcpa.supabase.co/functions/v1/withings-sync?key=sync-4b91d7e6-matacic';
 
+  const GOOGLE_SYNC_URL = SYNC_URL.replace('withings-sync', 'google-health-sync');
   async function manualSync() {
     const btn = document.querySelector('.refresh-btn');
     btn.classList.add('spinning');
@@ -1530,6 +1531,9 @@
 
     // Öffne Sync in neuem Tab — umgeht iOS CORS-Einschränkungen
     const syncWindow = window.open(SYNC_URL, '_blank');
+
+    // Google Health parallel anstossen (Antwort egal, Aufruf genuegt)
+    fetch(GOOGLE_SYNC_URL, { mode: 'no-cors' }).catch(function () {});
 
     // Nach 4 Sekunden Dashboard neu laden
     setTimeout(async () => {
@@ -1540,6 +1544,10 @@
         render();
         updateTableToggle();
         setTimeout(drawChart, 60);
+        try {
+          NUTRITION = await fetchNutrition();
+          setTimeout(drawBilanz, 60);
+        } catch (e) { console.error('Bilanz:', e); }
         status(DATA.length + ' Messungen · Start ' + fmtDate(START.date) + ' · Stand ' + fmtDate(DATA[0].date));
       } catch(e) {
         status('Fehler beim Laden: ' + e.message, true);
