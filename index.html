@@ -1591,7 +1591,7 @@
   }
 
   // ============================================================
-  //  BILANZ — kcal-Aufnahme & Getraenke, letzte 7 Tage bis gestern
+  //  BILANZ — kcal-Aufnahme & Getraenke, 7 Tage + laufender Tag
   // ============================================================
   let NUTRITION = [];
 
@@ -1604,16 +1604,26 @@
     return await res.json();
   }
 
+  function bilanzIso(d) {
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0')
+         + '-' + String(d.getDate()).padStart(2, '0');
+  }
+
   function drawBilanz() {
     const canvas = document.getElementById('bilanzChart');
     if (!canvas || !NUTRITION.length) return;
     const ctx = canvas.getContext('2d');
 
-    // Bis gestern bewerten — heute ist noch unvollstaendig
-    const y = new Date(); y.setDate(y.getDate() - 1);
-    const endStr = y.getFullYear() + '-' + String(y.getMonth()+1).padStart(2,'0')
-                 + '-' + String(y.getDate()).padStart(2,'0');
-    const rows = NUTRITION.filter(r => r.day <= endStr).slice(-7);
+    // 7 abgeschlossene Tage (bis gestern) + heute als laufende Spalte.
+    // "past" ist die Basis fuer alle Mittelwerte und Skalen — der laufende
+    // Tag darf Durchschnitte und Achsen nicht verzerren.
+    const now = new Date();
+    const todayStr = bilanzIso(now);
+    const yd = new Date(now); yd.setDate(yd.getDate() - 1);
+    const past = NUTRITION.filter(r => r.day <= bilanzIso(yd)).slice(-7);
+    const todayRow = NUTRITION.find(r => r.day === todayStr) || null;
+    const rows = todayRow ? past.concat([todayRow]) : past;
+    const tIdx = todayRow ? rows.length - 1 : -1;
     if (!rows.length) return;
 
     const dpr = window.devicePixelRatio || 1;
@@ -1626,6 +1636,7 @@
 
     const COL_DRINK = '#5bc8f5', COL_MUTED = '#7a7a85';
     const COL_GOOD = '#3dd68c', COL_BAD = '#d63b3b';
+    const COL_TODAY = '#e8a020';
     const STEP_GOAL = 10000;
     const BASE_KCAL = 2019;          // Tagesbedarf laut Fddb-Profil
     const padX = 8;
@@ -1636,40 +1647,42 @@
     const deltaOf = r => (Number(r.kcal_in) > 0 && (r.kcal_google !== null || r.kcal_apple !== null))
       ? BASE_KCAL + Number(r.kcal_out) - Number(r.kcal_in) : null;
     const deltas = rows.map(deltaOf);
-    const valid  = deltas.filter(v => v !== null);
+    const valid  = past.map(deltaOf).filter(v => v !== null);
     const dAbsMax = Math.max(600, ...valid.map(Math.abs));
 
     const y0 = 146, maxBarH = 32;    // Nulllinie + max. Balkenhoehe
 
-    // Getraenke: eigene Skala oberhalb
-    const mls = rows.map(r => Number(r.drinks_ml)).filter(v => v > 0);
-    const dMin = Math.min(...mls), dMax = Math.max(...mls);
+    // Getraenke: eigene Skala oberhalb — Skala nur aus abgeschlossenen Tagen
+    const mls = past.map(r => Number(r.drinks_ml)).filter(v => v > 0);
+    const dMin = mls.length ? Math.min(...mls) : 0;
+    const dMax = mls.length ? Math.max(...mls) : 4000;
     const span = Math.max(dMax - dMin, 800);
     const lo = dMin - span * 0.35, hi = dMax + span * 0.35;
     const yTop = 56, yBot = 92;
-    const yFor = ml => yBot - (ml - lo) / (hi - lo) * (yBot - yTop);
+    const yFor = ml => Math.max(yTop, Math.min(yBot,
+      yBot - (ml - lo) / (hi - lo) * (yBot - yTop)));
 
-    // --- Drei zentrierte Kopfzeilen ---
+    // --- Drei zentrierte Kopfzeilen (nur abgeschlossene Tage) ---
     ctx.textAlign = 'center';
     if (valid.length) {
-      const avg = valid.reduce((s,v) => s + v, 0) / valid.length;
+      const avg = valid.reduce((s, v) => s + v, 0) / valid.length;
       ctx.fillStyle = avg >= 0 ? COL_GOOD : COL_BAD;
       ctx.font = 'bold 10px DM Mono, monospace';
       ctx.fillText('Ø ' + (avg >= 0 ? '+' : '−')
-        + Math.round(Math.abs(avg)).toLocaleString('de-DE') + ' kcal', W/2, 12);
+        + Math.round(Math.abs(avg)).toLocaleString('de-DE') + ' kcal', W / 2, 12);
     }
     if (mls.length) {
-      const avgMl = mls.reduce((s,v) => s + v, 0) / mls.length;
+      const avgMl = mls.reduce((s, v) => s + v, 0) / mls.length;
       ctx.fillStyle = COL_DRINK;
       ctx.font = 'bold 10px DM Mono, monospace';
-      ctx.fillText('Ø ' + (avgMl/1000).toFixed(2).replace('.', ',') + ' L Getränke', W/2, 26);
+      ctx.fillText('Ø ' + (avgMl / 1000).toFixed(2).replace('.', ',') + ' L Getränke', W / 2, 26);
     }
-    const stepRows = rows.filter(r => (r.steps_google !== null || r.steps_apple !== null) && Number(r.steps) > 0);
+    const stepRows = past.filter(r => (r.steps_google !== null || r.steps_apple !== null) && Number(r.steps) > 0);
     if (stepRows.length) {
-      const avgSt = stepRows.reduce((s,r) => s + Number(r.steps), 0) / stepRows.length;
+      const avgSt = stepRows.reduce((s, r) => s + Number(r.steps), 0) / stepRows.length;
       ctx.fillStyle = avgSt >= STEP_GOAL ? COL_GOOD : COL_BAD;
       ctx.font = 'bold 10px DM Mono, monospace';
-      ctx.fillText('Ø ' + Math.round(avgSt).toLocaleString('de-DE') + ' Schritte', W/2, 40);
+      ctx.fillText('Ø ' + Math.round(avgSt).toLocaleString('de-DE') + ' Schritte', W / 2, 40);
     }
 
     // --- Nulllinie ---
@@ -1677,9 +1690,20 @@
     ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(padX, y0 + 0.5); ctx.lineTo(W - padX, y0 + 0.5); ctx.stroke();
 
+    // --- Trennstrich vor dem laufenden Tag ---
+    if (tIdx > 0) {
+      const sx = padX + slot * tIdx;
+      ctx.strokeStyle = 'rgba(232,160,32,0.28)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([2, 3]);
+      ctx.beginPath(); ctx.moveTo(sx, 50); ctx.lineTo(sx, 210); ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
     // --- Delta-Balken ---
     rows.forEach((r, i) => {
       const cx = padX + slot * i + slot / 2;
+      const isT = i === tIdx;
       const dv = deltas[i];
       if (dv === null) {
         ctx.fillStyle = COL_MUTED;
@@ -1687,12 +1711,23 @@
         ctx.fillText('—', cx, y0 - 5);
         return;
       }
-      const h = Math.max(3, Math.abs(dv) / dAbsMax * maxBarH);
+      const h = Math.max(3, Math.min(1, Math.abs(dv) / dAbsMax) * maxBarH);
       const up = dv >= 0;
-      ctx.fillStyle = up ? COL_GOOD : COL_BAD;
+      const col = up ? COL_GOOD : COL_BAD;
       ctx.beginPath();
-      ctx.roundRect(cx - barW/2, up ? y0 - h : y0, barW, h, 3);
-      ctx.fill();
+      ctx.roundRect(cx - barW / 2, up ? y0 - h : y0, barW, h, 3);
+      if (isT) {
+        // laufender Tag: nur Kontur, damit er nicht wie ein Ergebnis wirkt
+        ctx.strokeStyle = col;
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([3, 2]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      } else {
+        ctx.fillStyle = col;
+        ctx.fill();
+      }
+      ctx.fillStyle = col;
       ctx.font = 'bold 9px DM Mono, monospace';
       ctx.fillText((up ? '+' : '−') + Math.abs(dv).toLocaleString('de-DE'),
                    cx, up ? y0 - h - 5 : y0 + h + 11);
@@ -1701,54 +1736,81 @@
     // --- Linie (Getraenke) ---
     const pts = rows.map((r, i) => {
       const ml = Number(r.drinks_ml);
-      return ml > 0 ? { x: padX + slot * i + slot / 2, y: yFor(ml), ml } : null;
+      return ml > 0 ? { x: padX + slot * i + slot / 2, y: yFor(ml), ml, t: i === tIdx } : null;
     }).filter(Boolean);
 
-    if (pts.length > 1) {
+    const solid = pts.filter(p => !p.t);
+    if (solid.length > 1) {
       ctx.strokeStyle = COL_DRINK;
       ctx.lineWidth = 2;
       ctx.lineJoin = 'round';
       ctx.beginPath();
-      pts.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y));
+      solid.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y));
       ctx.stroke();
     }
+    // Anschluss zum laufenden Tag gestrichelt
+    const tPt = pts.find(p => p.t);
+    if (tPt && solid.length) {
+      const last = solid[solid.length - 1];
+      ctx.strokeStyle = COL_DRINK;
+      ctx.lineWidth = 2;
+      ctx.setLineDash([3, 3]);
+      ctx.beginPath(); ctx.moveTo(last.x, last.y); ctx.lineTo(tPt.x, tPt.y); ctx.stroke();
+      ctx.setLineDash([]);
+    }
     pts.forEach(p => {
+      ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
+      if (p.t) {
+        ctx.strokeStyle = COL_DRINK; ctx.lineWidth = 1.5; ctx.stroke();
+      } else {
+        ctx.fillStyle = COL_DRINK; ctx.fill();
+      }
       ctx.fillStyle = COL_DRINK;
-      ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, Math.PI*2); ctx.fill();
       ctx.font = 'bold 8px DM Mono, monospace';
-      ctx.fillText((p.ml/1000).toFixed(1).replace('.', ',') + ' L', p.x, p.y - 7);
+      ctx.fillText((p.ml / 1000).toFixed(1).replace('.', ',') + ' L', p.x, p.y - 7);
     });
 
     // --- Tages-Labels + Schritte-Streifen ---
     const stripW = Math.min(slot * 0.72, 42), stripH = 6, stripY = 214;
     rows.forEach((r, i) => {
       const cx = padX + slot * i + slot / 2;
+      const isT = i === tIdx;
       const d = new Date(r.day + 'T12:00:00');
-      const wd = ['So','Mo','Di','Mi','Do','Fr','Sa'][d.getDay()];
-      ctx.fillStyle = COL_MUTED;
-      ctx.font = '9px DM Mono, monospace';
-      ctx.fillText(wd, cx, 194);
+      const wd = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'][d.getDay()];
+      ctx.fillStyle = isT ? COL_TODAY : COL_MUTED;
+      ctx.font = isT ? 'bold 9px DM Mono, monospace' : '9px DM Mono, monospace';
+      ctx.fillText(isT ? 'HEUTE' : wd, cx, 194);
       ctx.font = '8px DM Mono, monospace';
-      ctx.fillText(String(d.getDate()).padStart(2,'0') + '.'
-                 + String(d.getMonth()+1).padStart(2,'0'), cx, 204);
+      ctx.fillText(String(d.getDate()).padStart(2, '0') + '.'
+                 + String(d.getMonth() + 1).padStart(2, '0'), cx, 204);
 
       const hasSteps = r.steps_google !== null || r.steps_apple !== null;
       const st = hasSteps ? (Number(r.steps) || 0) : 0;
       ctx.fillStyle = 'rgba(255,255,255,0.07)';
       ctx.beginPath();
-      ctx.roundRect(cx - stripW/2, stripY, stripW, stripH, 3);
+      ctx.roundRect(cx - stripW / 2, stripY, stripW, stripH, 3);
       ctx.fill();
       if (st > 0) {
         const frac = Math.min(st / STEP_GOAL, 1);
-        ctx.fillStyle = st >= STEP_GOAL ? COL_GOOD : COL_BAD;
+        // laufender Tag: neutralblau statt Ampel — 4.000 Schritte um 10 Uhr
+        // sind kein Misserfolg, der Tag laeuft ja noch
+        ctx.fillStyle = isT ? COL_DRINK : (st >= STEP_GOAL ? COL_GOOD : COL_BAD);
         ctx.beginPath();
-        ctx.roundRect(cx - stripW/2, stripY, Math.max(3, stripW * frac), stripH, 3);
+        ctx.roundRect(cx - stripW / 2, stripY, Math.max(3, stripW * frac), stripH, 3);
         ctx.fill();
         ctx.font = 'bold 8px DM Mono, monospace';
         ctx.fillText(st.toLocaleString('de-DE'), cx, stripY + 17);
       }
     });
   }
+
+  // Beim Zurueckkehren in die App frische Daten holen (stuendlicher Sync)
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState !== 'visible') return;
+    fetchNutrition()
+      .then(function (n) { NUTRITION = n; drawBilanz(); })
+      .catch(function () {});
+  });
 
   window.addEventListener('resize', function () { drawChart(); drawBilanz(); });
   init();
