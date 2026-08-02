@@ -929,6 +929,14 @@
   <div class="table-more" id="tableMore" onclick="toggleTable()">▼ Alle anzeigen</div>
 </div>
 
+<!-- PULL TO REFRESH -->
+<div id="ptrIndicator" style="position:fixed; top:0; left:0; right:0; z-index:99;
+     transform:translateY(-100%); transition:transform 0.22s ease;
+     background:#13131a; color:#e8a020; text-align:center;
+     font-family:'DM Mono',monospace; font-size:0.62rem; letter-spacing:0.06em;
+     padding:10px 0; border-bottom:1px solid rgba(232,160,32,0.25);
+     pointer-events:none;">↓ ZIEHEN ZUM AKTUALISIEREN</div>
+
 <!-- STATUS -->
 <div id="statusBar" class="status-bar">Lade Daten …</div>
 
@@ -944,7 +952,7 @@
   // ============================================================
   //  KONFIGURATION
   // ============================================================
-  const BUILD = '2026-08-02 12:05';   // bei jedem Deploy hochsetzen
+  const BUILD = '2026-08-02 17:40';   // bei jedem Deploy hochsetzen
   const SUPABASE_URL = 'https://atzcaxahulifnuvwxcpa.supabase.co';
 
   // ⬇⬇⬇  HIER DEINEN PUBLISHABLE KEY EINSETZEN  ⬇⬇⬇
@@ -1868,6 +1876,74 @@
       }
     });
   }
+
+  // Alle Daten neu holen und neu zeichnen — ohne Sync anzustossen.
+  // Wird von Pull-to-Refresh und beim Zurueckkehren in die App benutzt.
+  async function reloadData() {
+    DATA = await fetchData();
+    START = deriveStart(DATA);
+    render();
+    updateTableToggle();
+    setTimeout(drawChart, 60);
+    NUTRITION = await fetchNutrition();
+    setTimeout(drawBilanz, 60);
+    if (START && DATA.length) {
+      status(DATA.length + ' Messungen · Start ' + fmtDate(START.date)
+             + ' · Stand ' + fmtDate(DATA[0].date));
+    }
+  }
+
+  // Pull-to-Refresh. Greift nur ganz oben auf der Seite und nicht auf den
+  // Charts — die haben eigene Touch-Handler fuer den Tooltip.
+  (function () {
+    const ind = document.getElementById('ptrIndicator');
+    if (!ind) return;
+    const THRESHOLD = 70;
+    let startY = 0, dist = 0, pulling = false, busy = false;
+
+    function hide() { ind.style.transform = 'translateY(-100%)'; }
+
+    document.addEventListener('touchstart', function (e) {
+      if (busy || window.scrollY > 0 || e.target.tagName === 'CANVAS') {
+        pulling = false;
+        return;
+      }
+      startY = e.touches[0].clientY;
+      dist = 0;
+      pulling = true;
+    }, { passive: true });
+
+    document.addEventListener('touchmove', function (e) {
+      if (!pulling) return;
+      dist = e.touches[0].clientY - startY;
+      if (dist <= 0 || window.scrollY > 0) { hide(); pulling = false; return; }
+      // Gedaempfte Bewegung, damit es sich nicht gummiartig anfuehlt
+      const shown = Math.min(dist * 0.45, 46);
+      ind.style.transition = 'none';
+      ind.style.transform = 'translateY(' + (shown - 46) + 'px)';
+      ind.textContent = dist > THRESHOLD ? '↻ LOSLASSEN' : '↓ ZIEHEN ZUM AKTUALISIEREN';
+      if (dist > 6) e.preventDefault();   // iOS-Bounce unterdruecken
+    }, { passive: false });
+
+    document.addEventListener('touchend', function () {
+      if (!pulling) return;
+      pulling = false;
+      ind.style.transition = 'transform 0.22s ease';
+      if (dist > THRESHOLD) {
+        busy = true;
+        ind.textContent = '↻ AKTUALISIERE …';
+        ind.style.transform = 'translateY(0)';
+        reloadData()
+          .catch(function (e) { status('Fehler beim Laden: ' + e.message, true); })
+          .finally(function () {
+            setTimeout(function () { hide(); busy = false; }, 450);
+          });
+      } else {
+        hide();
+      }
+      dist = 0;
+    }, { passive: true });
+  })();
 
   // Beim Zurueckkehren in die App frische Daten holen (stuendlicher Sync)
   document.addEventListener('visibilitychange', function () {
