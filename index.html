@@ -1617,7 +1617,13 @@
   // der Bioimpedanz-Messung nicht durchschlagen.
   function realKcalPerDay(days) {
     days = days || 30;
-    const cut = Date.now() - days * 86400000;
+    // Schnitt auf die Tagesgrenze legen, nicht auf "jetzt minus 30 Tage" —
+    // sonst faellt eine Messung am Rand je nach Uhrzeit des Aufrufs mal
+    // rein und mal raus, und die Zahl springt zwischen zwei Geraeten.
+    const cutDate = new Date();
+    cutDate.setHours(0, 0, 0, 0);
+    cutDate.setDate(cutDate.getDate() - days);
+    const cut = cutDate.getTime();
     const pts = DATA
       .filter(d => d.absfat !== null && d.date &&
                    new Date(d.date + 'T12:00:00').getTime() >= cut)
