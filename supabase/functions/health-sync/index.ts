@@ -4,20 +4,24 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 // Aktivitaet: steps_apple, kcal_apple
 // Ernaehrung (Fddb schreibt nach Apple Health): kcal_in, protein_g, carbs_g, fat_g, drinks_ml
 //
-// v8 (28.07.2026)
-//  - loggt jeden eingehenden Payload nach public.health_raw
-//  - Wasser nur aus der Automation mit ?src=raw (Einzelmessungen),
-//    damit sich die beiden Automationen nicht gegenseitig ueberschreiben
+// v9 (02.08.2026)
+//  - Wasser wird wieder aus JEDER Automation uebernommen (auch aggregiert)
+//  - Roh-Logging nach health_raw bleibt
+//
+// Warum die src=raw-Weiche wieder weg ist:
+// Sie war nur dazu da, verwaiste Staende des 0,25-l-Wasserzaehlers zu
+// entdoppeln. Seit 28.07. wird der Zaehler nicht mehr benutzt, Getraenke
+// laufen als Tagebuch-Eintraege -> es gibt keine Dubletten mehr.
+// Die zweite Automation "EMA Body Wasser" hat ausserdem nie automatisch
+// gesendet (nur manuelle Exporte kamen an). Ergebnis: v8 verwarf das
+// Wasser aus der funktionierenden Automation, und ab 29.07. blieb
+// drinks_ml leer, obwohl die Werte im Payload standen.
 //
 // Zur Vorgeschichte, damit es niemand nochmal versucht:
-// Fddb schrieb beim Korrigieren des 0,25-l-Wasserzaehlers den neuen Stand
-// nach Apple Health, ohne den alten zu loeschen - beide mit Zeitstempel
-// 00:00. Eine Entdopplung in dieser Function ist NICHT moeglich: Health
-// Auto Export verschmilzt Messungen mit identischem Zeitstempel, bevor es
-// sie sendet (27.07.: 2700 + 2950 kamen als eine Messung mit 5650 an).
+// Eine Entdopplung in dieser Function ist NICHT moeglich. Health Auto
+// Export verschmilzt Messungen mit identischem Zeitstempel, bevor es sie
+// sendet (27.07.: 2700 + 2950 kamen als eine Messung mit 5650 an).
 // Ausserdem war mal der groessere, mal der kleinere Wert der richtige.
-// Geloest wurde es an der Quelle: der Zaehler wird nicht mehr benutzt,
-// Getraenke laufen als Tagebuch-Eintraege - die sind nachweislich korrekt.
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY  = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -97,9 +101,6 @@ Deno.serve(async (req: Request) => {
       if (/\bl\b/.test(units) && !units.includes("ml")) factor = 1000;
     }
     if (!col) continue;
-
-    // Wasser aus der aggregierten Automation ignorieren
-    if (col === "drinks_ml" && !isRaw) continue;
 
     for (const row of rows) {
       const day = dayOf(row?.date);
