@@ -1639,7 +1639,11 @@
       den += (p.x - mx) * (p.x - mx);
     }
     if (!den) return null;
-    return -(num / den) * 7700;   // kg Fett/Tag -> kcal/Tag, positiv = Defizit
+    const slope = num / den;            // kg Fett pro Tag
+    return {
+      kcal: -slope * 7700,              // kcal/Tag, positiv = Defizit
+      kgWeek: slope * 7,                // kg Fett/Woche, negativ = Abbau
+    };
   }
 
   function drawBilanz() {
@@ -1706,8 +1710,10 @@
       const real = realKcalPerDay(30);
       const txtA = 'Ø ' + (avg >= 0 ? '+' : '−')
         + Math.round(Math.abs(avg)).toLocaleString('de-DE') + ' kcal';
-      const txtB = real === null ? '' : '  real ' + (real >= 0 ? '+' : '−')
-        + Math.round(Math.abs(real)).toLocaleString('de-DE');
+      const txtB = real === null ? '' : '  real ' + (real.kcal >= 0 ? '+' : '−')
+        + Math.round(Math.abs(real.kcal)).toLocaleString('de-DE')
+        + ' ' + (real.kgWeek <= 0 ? '▼' : '▲')
+        + Math.abs(real.kgWeek).toFixed(2).replace('.', ',') + ' kg/Wo';
       ctx.font = 'bold 10px DM Mono, monospace';
       const wA = ctx.measureText(txtA).width;
       const wB = txtB ? ctx.measureText(txtB).width : 0;
