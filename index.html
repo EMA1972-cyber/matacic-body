@@ -1609,6 +1609,33 @@
          + '-' + String(d.getDate()).padStart(2, '0');
   }
 
+  // Real gemessenes Defizit aus dem Fettmasse-Trend.
+  // Bewusst die Fettmasse und nicht das Gewicht: 7700 kcal gelten pro kg
+  // Fettgewebe. Wasser- und Glykogenschwankungen (Festival, Salz, Zyklus)
+  // tragen keine Energie und wuerden die Zahl sonst verfaelschen.
+  // Lineare Regression statt Anfang-gegen-Ende, damit einzelne Ausreisser
+  // der Bioimpedanz-Messung nicht durchschlagen.
+  function realKcalPerDay(days) {
+    days = days || 30;
+    const cut = Date.now() - days * 86400000;
+    const pts = DATA
+      .filter(d => d.absfat !== null && d.date &&
+                   new Date(d.date + 'T12:00:00').getTime() >= cut)
+      .map(d => ({ x: new Date(d.date + 'T12:00:00').getTime() / 86400000,
+                   y: d.absfat }));
+    if (pts.length < 10) return null;          // zu duenn fuer eine Aussage
+    const n = pts.length;
+    const mx = pts.reduce((s, p) => s + p.x, 0) / n;
+    const my = pts.reduce((s, p) => s + p.y, 0) / n;
+    let num = 0, den = 0;
+    for (const p of pts) {
+      num += (p.x - mx) * (p.y - my);
+      den += (p.x - mx) * (p.x - mx);
+    }
+    if (!den) return null;
+    return -(num / den) * 7700;   // kg Fett/Tag -> kcal/Tag, positiv = Defizit
+  }
+
   function drawBilanz() {
     const canvas = document.getElementById('bilanzChart');
     if (!canvas || !NUTRITION.length) return;
@@ -1665,11 +1692,28 @@
     // --- Drei zentrierte Kopfzeilen (nur abgeschlossene Tage) ---
     ctx.textAlign = 'center';
     if (valid.length) {
+      // Zwei Zahlen in einer Zeile: was die Erfassung rechnet und was der
+      // Koerper tatsaechlich hergibt. Die Luecke dazwischen ist die
+      // eigentliche Information — Tracker ueberschaetzen den Verbrauch,
+      // geschaetzte Portionen unterschaetzen die Aufnahme.
       const avg = valid.reduce((s, v) => s + v, 0) / valid.length;
-      ctx.fillStyle = avg >= 0 ? COL_GOOD : COL_BAD;
+      const real = realKcalPerDay(30);
+      const txtA = 'Ø ' + (avg >= 0 ? '+' : '−')
+        + Math.round(Math.abs(avg)).toLocaleString('de-DE') + ' kcal';
+      const txtB = real === null ? '' : '  real ' + (real >= 0 ? '+' : '−')
+        + Math.round(Math.abs(real)).toLocaleString('de-DE');
       ctx.font = 'bold 10px DM Mono, monospace';
-      ctx.fillText('Ø ' + (avg >= 0 ? '+' : '−')
-        + Math.round(Math.abs(avg)).toLocaleString('de-DE') + ' kcal', W / 2, 12);
+      const wA = ctx.measureText(txtA).width;
+      const wB = txtB ? ctx.measureText(txtB).width : 0;
+      const x0 = W / 2 - (wA + wB) / 2;
+      ctx.textAlign = 'left';
+      ctx.fillStyle = avg >= 0 ? COL_GOOD : COL_BAD;
+      ctx.fillText(txtA, x0, 12);
+      if (txtB) {
+        ctx.fillStyle = COL_TODAY;   // gold = gemessene Referenz, keine Ampel
+        ctx.fillText(txtB, x0 + wA, 12);
+      }
+      ctx.textAlign = 'center';
     }
     if (mls.length) {
       const avgMl = mls.reduce((s, v) => s + v, 0) / mls.length;
