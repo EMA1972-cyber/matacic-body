@@ -932,10 +932,19 @@
 <!-- STATUS -->
 <div id="statusBar" class="status-bar">Lade Daten …</div>
 
+<!-- VERSION — zeigt den Stand des tatsaechlich laufenden Codes.
+     Bewusst hart eingetragen und nicht vom Server geholt: kaeme die Seite
+     aus dem Cache, wuerde ein Server-Abruf faelschlich "aktuell" melden,
+     obwohl alter Code laeuft. -->
+<div id="buildInfo" style="text-align:center; font-family:'DM Mono',monospace;
+     font-size:0.5rem; letter-spacing:0.08em; color:var(--muted);
+     opacity:0.55; margin:18px 0 6px;"></div>
+
 <script>
   // ============================================================
   //  KONFIGURATION
   // ============================================================
+  const BUILD = '2026-08-02 12:05';   // bei jedem Deploy hochsetzen
   const SUPABASE_URL = 'https://atzcaxahulifnuvwxcpa.supabase.co';
 
   // ⬇⬇⬇  HIER DEINEN PUBLISHABLE KEY EINSETZEN  ⬇⬇⬇
@@ -1919,6 +1928,12 @@
   document.addEventListener('click', e => {
     if (e.target !== canvas) tooltip.style.display = 'none';
   });
+
+  // Version am Seitenende ausgeben
+  (function () {
+    const el = document.getElementById('buildInfo');
+    if (el) el.textContent = 'STAND ' + BUILD.replace(/-/g, '.').toUpperCase();
+  })();
 </script>
 </body>
 </html>
