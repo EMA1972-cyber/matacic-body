@@ -952,7 +952,7 @@
   // ============================================================
   //  KONFIGURATION
   // ============================================================
-  const BUILD = '2026-08-02 17:40';   // bei jedem Deploy hochsetzen
+  const BUILD = '2026-08-03 08:50';   // bei jedem Deploy hochsetzen
   const SUPABASE_URL = 'https://atzcaxahulifnuvwxcpa.supabase.co';
 
   // ⬇⬇⬇  HIER DEINEN PUBLISHABLE KEY EINSETZEN  ⬇⬇⬇
@@ -1725,9 +1725,14 @@
       // geschaetzte Portionen unterschaetzen die Aufnahme.
       const avg = valid.reduce((s, v) => s + v, 0) / valid.length;
       const real = realKcalPerDay(30);
-      const txtA = 'Ø ' + (avg >= 0 ? '+' : '−')
+      // Vorzeichen in Energiebilanz-Konvention: Aufnahme minus Verbrauch.
+      // Ein Defizit ist damit NEGATIV (weniger gegessen als verbraucht).
+      // Intern rechnet deltaOf weiterhin als "Uebrig" (positiv = Defizit),
+      // weil die Balkenrichtung und die Ampel daran haengen — gedreht wird
+      // nur die Beschriftung.
+      const txtA = 'Ø ' + (avg >= 0 ? '−' : '+')
         + Math.round(Math.abs(avg)).toLocaleString('de-DE') + ' kcal';
-      const txtB = real === null ? '' : '  real ' + (real.kcal >= 0 ? '+' : '−')
+      const txtB = real === null ? '' : '  real ' + (real.kcal >= 0 ? '−' : '+')
         + Math.round(Math.abs(real.kcal)).toLocaleString('de-DE')
         + ' ' + (real.kgWeek <= 0 ? '▼' : '▲')
         + Math.abs(real.kgWeek).toFixed(2).replace('.', ',') + ' kg/Wo';
@@ -1802,7 +1807,9 @@
       }
       ctx.fillStyle = col;
       ctx.font = 'bold 9px DM Mono, monospace';
-      ctx.fillText((up ? '+' : '−') + Math.abs(dv).toLocaleString('de-DE'),
+      // Balken zeigt weiter nach oben bei Erfolg, die Zahl folgt aber der
+      // Energiebilanz: Defizit = negativ.
+      ctx.fillText((up ? '−' : '+') + Math.abs(dv).toLocaleString('de-DE'),
                    cx, up ? y0 - h - 5 : y0 + h + 11);
     });
 
