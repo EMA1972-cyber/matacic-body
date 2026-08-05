@@ -903,6 +903,12 @@
   <canvas id="bilanzChart"></canvas>
 </div>
 
+<!-- REGENERATION -->
+<div class="chart-wrap">
+  <div class="chart-title">Regeneration</div>
+  <canvas id="regenChart"></canvas>
+</div>
+
 <!-- TABLE -->
 <div class="table-wrap">
   <div class="table-header" onclick="toggleTable()">
@@ -952,7 +958,7 @@
   // ============================================================
   //  KONFIGURATION
   // ============================================================
-  const BUILD = '2026-08-03 08:50';   // bei jedem Deploy hochsetzen
+  const BUILD = '2026-08-05 20:30';   // bei jedem Deploy hochsetzen
   const SUPABASE_URL = 'https://atzcaxahulifnuvwxcpa.supabase.co';
 
   // ⬇⬇⬇  HIER DEINEN PUBLISHABLE KEY EINSETZEN  ⬇⬇⬇
@@ -1612,6 +1618,176 @@
   // ============================================================
   let NUTRITION = [];
 
+  // ============================================================
+  //  REGENERATION — HRV, Ruhepuls, Schlaf
+  // ============================================================
+  //  Der Block ist bewusst KEIN Leistungsziel. Er soll bremsen, nicht
+  //  antreiben: Die Ampel warnt, wenn die HRV unter die eigene Baseline
+  //  faellt oder der Ruhepuls darueber steigt — also genau dann, wenn
+  //  man sich subjektiv noch gut fuehlt, der Koerper aber schon
+  //  hinterherhinkt. Es gibt keine "je hoeher desto besser"-Wertung.
+  let VITALS = [];
+
+  async function fetchVitals() {
+    const url = SUPABASE_URL + '/rest/v1/vitals?select=*&order=day.asc';
+    const res = await fetch(url, {
+      headers: { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + SUPABASE_KEY },
+    });
+    if (!res.ok) return [];
+    return await res.json();
+  }
+
+  function drawRegen() {
+    const canvas = document.getElementById('regenChart');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const dpr = window.devicePixelRatio || 1;
+    const H = 238;
+    canvas.width = canvas.offsetWidth * dpr;
+    canvas.height = H * dpr;
+    ctx.scale(dpr, dpr);
+    const W = canvas.offsetWidth;
+    ctx.clearRect(0, 0, W, H);
+
+    const COL_HRV = '#a78bfa', COL_HR = '#f0a060', COL_SLEEP = '#5bc8f5';
+    const COL_GOOD = '#3dd68c', COL_BAD = '#d63b3b', COL_MUTED = '#7a7a85';
+
+    const rows = VITALS.slice(-14);
+    ctx.textAlign = 'center';
+
+    if (rows.length < 2) {
+      ctx.fillStyle = COL_MUTED;
+      ctx.font = '10px DM Mono, monospace';
+      ctx.fillText('Sammelt Daten … mindestens 2 Nächte nötig', W / 2, H / 2 - 6);
+      ctx.font = '9px DM Mono, monospace';
+      ctx.fillText(rows.length + ' von 2', W / 2, H / 2 + 10);
+      return;
+    }
+
+    // Baseline aus allen Tagen ausser den letzten drei — der aktuelle
+    // Zustand soll sich am eigenen Normalzustand messen, nicht an sich selbst
+    const base = VITALS.slice(0, -3);
+    const avgOf = (arr, key) => {
+      const v = arr.map(r => Number(r[key])).filter(x => isFinite(x) && x > 0);
+      return v.length ? v.reduce((s, x) => s + x, 0) / v.length : null;
+    };
+    const hrvBase = avgOf(base.length >= 5 ? base : VITALS, 'hrv_ms');
+    const hrBase  = avgOf(base.length >= 5 ? base : VITALS, 'resting_hr');
+
+    const last = rows[rows.length - 1];
+    const hrvNow = Number(last.hrv_ms);
+    const hrNow  = Number(last.resting_hr);
+
+    // --- Kopfzeile: aktueller Zustand gegen Baseline ---
+    let statusTxt = 'Baseline wird aufgebaut', statusCol = COL_MUTED;
+    if (hrvBase && isFinite(hrvNow) && base.length >= 5) {
+      const dev = (hrvNow - hrvBase) / hrvBase;
+      if (dev < -0.15) { statusTxt = 'HRV unter Baseline — Belastung zurücknehmen'; statusCol = COL_BAD; }
+      else if (dev > 0.10) { statusTxt = 'gut erholt'; statusCol = COL_GOOD; }
+      else { statusTxt = 'im Normalbereich'; statusCol = COL_MUTED; }
+    }
+    ctx.fillStyle = statusCol;
+    ctx.font = 'bold 10px DM Mono, monospace';
+    ctx.fillText(statusTxt, W / 2, 12);
+
+    const parts = [];
+    if (isFinite(hrvNow)) parts.push('HRV ' + Math.round(hrvNow) + ' ms');
+    if (isFinite(hrNow))  parts.push('Ruhepuls ' + Math.round(hrNow));
+    if (last.sleep_total_h) parts.push('Schlaf ' + Number(last.sleep_total_h).toFixed(1).replace('.', ',') + ' h');
+    ctx.fillStyle = COL_MUTED;
+    ctx.font = '9px DM Mono, monospace';
+    ctx.fillText(parts.join('  ·  '), W / 2, 26);
+
+    // --- HRV-Verlauf als Linie, Baseline gestrichelt ---
+    const padX = 10, yTop = 46, yBot = 132;
+    const hrvVals = rows.map(r => Number(r.hrv_ms)).filter(v => isFinite(v) && v > 0);
+    if (hrvVals.length >= 2) {
+      const lo = Math.min(...hrvVals) * 0.85, hi = Math.max(...hrvVals) * 1.1;
+      const slot = (W - padX * 2) / Math.max(rows.length - 1, 1);
+      const yFor = v => yBot - (v - lo) / (hi - lo) * (yBot - yTop);
+
+      if (hrvBase) {
+        const yb = yFor(hrvBase);
+        if (yb > yTop && yb < yBot) {
+          ctx.strokeStyle = 'rgba(167,139,250,0.35)';
+          ctx.lineWidth = 1; ctx.setLineDash([3, 3]);
+          ctx.beginPath(); ctx.moveTo(padX, yb); ctx.lineTo(W - padX, yb); ctx.stroke();
+          ctx.setLineDash([]);
+          ctx.fillStyle = 'rgba(167,139,250,0.6)';
+          ctx.font = '8px DM Mono, monospace';
+          ctx.textAlign = 'left';
+          ctx.fillText('Ø ' + Math.round(hrvBase), padX + 2, yb - 4);
+          ctx.textAlign = 'center';
+        }
+      }
+
+      const pts = rows.map((r, i) => {
+        const v = Number(r.hrv_ms);
+        return (isFinite(v) && v > 0) ? { x: padX + slot * i, y: yFor(v), v } : null;
+      }).filter(Boolean);
+
+      ctx.strokeStyle = COL_HRV; ctx.lineWidth = 2; ctx.lineJoin = 'round';
+      ctx.beginPath();
+      pts.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y));
+      ctx.stroke();
+      pts.forEach((p, i) => {
+        ctx.beginPath(); ctx.arc(p.x, p.y, i === pts.length - 1 ? 4 : 2.5, 0, Math.PI * 2);
+        ctx.fillStyle = COL_HRV; ctx.fill();
+      });
+      if (pts.length) {
+        const p = pts[pts.length - 1];
+        ctx.fillStyle = COL_HRV;
+        ctx.font = 'bold 9px DM Mono, monospace';
+        ctx.fillText(Math.round(p.v) + ' ms', Math.min(p.x, W - 24), p.y - 9);
+      }
+    }
+
+    // --- Schlafbalken unten: Tiefschlaf gefuellt, Rest als Kontur ---
+    const bY = 160, bH = 26;
+    const slotB = (W - padX * 2) / rows.length;
+    const bw = Math.min(slotB * 0.6, 26);
+    const maxSleep = Math.max(7, ...rows.map(r => Number(r.sleep_total_h) || 0));
+    rows.forEach((r, i) => {
+      const cx = padX + slotB * i + slotB / 2;
+      const tot = Number(r.sleep_total_h), deep = Number(r.sleep_deep_h);
+      if (!isFinite(tot) || tot <= 0) return;
+      const hTot = tot / maxSleep * bH;
+      ctx.strokeStyle = 'rgba(91,200,245,0.45)';
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.roundRect(cx - bw / 2, bY + bH - hTot, bw, hTot, 2); ctx.stroke();
+      if (isFinite(deep) && deep > 0) {
+        const hDeep = deep / maxSleep * bH;
+        ctx.fillStyle = COL_SLEEP;
+        ctx.beginPath(); ctx.roundRect(cx - bw / 2, bY + bH - hDeep, bw, hDeep, 2); ctx.fill();
+      }
+    });
+    ctx.fillStyle = COL_MUTED;
+    ctx.font = '8px DM Mono, monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText('SCHLAF — gefüllt = Tiefschlaf', padX, bY - 6);
+    ctx.textAlign = 'center';
+
+    // --- Datums-Labels ---
+    rows.forEach((r, i) => {
+      if (rows.length > 8 && i % 2 !== 0 && i !== rows.length - 1) return;
+      const cx = padX + slotB * i + slotB / 2;
+      const d = new Date(r.day + 'T12:00:00');
+      ctx.fillStyle = i === rows.length - 1 ? '#e8a020' : COL_MUTED;
+      ctx.font = (i === rows.length - 1 ? 'bold ' : '') + '8px DM Mono, monospace';
+      ctx.fillText(String(d.getDate()).padStart(2, '0') + '.'
+                 + String(d.getMonth() + 1).padStart(2, '0'), cx, bY + bH + 14);
+    });
+
+    // --- Ruhepuls klein darunter, nur wenn Baseline steht ---
+    if (hrBase && isFinite(hrNow) && base.length >= 5) {
+      const diff = hrNow - hrBase;
+      ctx.fillStyle = diff > 3 ? COL_BAD : (diff < -2 ? COL_GOOD : COL_MUTED);
+      ctx.font = '9px DM Mono, monospace';
+      ctx.fillText('Ruhepuls ' + Math.round(hrNow) + ' · Ø ' + Math.round(hrBase)
+        + ' (' + (diff >= 0 ? '+' : '−') + Math.abs(diff).toFixed(0) + ')', W / 2, H - 8);
+    }
+  }
+
   async function fetchNutrition() {
     const url = SUPABASE_URL + '/rest/v1/nutrition?select=*&order=day.asc';
     const res = await fetch(url, {
@@ -1894,6 +2070,8 @@
     setTimeout(drawChart, 60);
     NUTRITION = await fetchNutrition();
     setTimeout(drawBilanz, 60);
+    VITALS = await fetchVitals();
+    setTimeout(drawRegen, 60);
     if (START && DATA.length) {
       status(DATA.length + ' Messungen · Start ' + fmtDate(START.date)
              + ' · Stand ' + fmtDate(DATA[0].date));
@@ -1958,9 +2136,12 @@
     fetchNutrition()
       .then(function (n) { NUTRITION = n; drawBilanz(); })
       .catch(function () {});
+    fetchVitals()
+      .then(function (v) { VITALS = v; drawRegen(); })
+      .catch(function () {});
   });
 
-  window.addEventListener('resize', function () { drawChart(); drawBilanz(); });
+  window.addEventListener('resize', function () { drawChart(); drawBilanz(); drawRegen(); });
   init();
 
   // Tooltip on click/touch
