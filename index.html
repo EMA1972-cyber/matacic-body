@@ -958,7 +958,7 @@
   // ============================================================
   //  KONFIGURATION
   // ============================================================
-  const BUILD = '2026-08-05 20:30';   // bei jedem Deploy hochsetzen
+  const BUILD = '2026-08-06 07:40';   // bei jedem Deploy hochsetzen
   const SUPABASE_URL = 'https://atzcaxahulifnuvwxcpa.supabase.co';
 
   // ⬇⬇⬇  HIER DEINEN PUBLISHABLE KEY EINSETZEN  ⬇⬇⬇
@@ -1769,7 +1769,10 @@
 
     // --- Datums-Labels ---
     rows.forEach((r, i) => {
-      if (rows.length > 8 && i % 2 !== 0 && i !== rows.length - 1) return;
+      // Vom ENDE zaehlen, nicht vom Anfang: sonst landen bei gerader
+      // Anzahl der letzte und der vorletzte Tag direkt nebeneinander
+      // und die Datumslabels ueberlappen.
+      if (rows.length > 8 && (rows.length - 1 - i) % 2 !== 0) return;
       const cx = padX + slotB * i + slotB / 2;
       const d = new Date(r.day + 'T12:00:00');
       ctx.fillStyle = i === rows.length - 1 ? '#e8a020' : COL_MUTED;
