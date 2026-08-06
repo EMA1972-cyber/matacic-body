@@ -958,7 +958,7 @@
   // ============================================================
   //  KONFIGURATION
   // ============================================================
-  const BUILD = '2026-08-06 08:20';   // bei jedem Deploy hochsetzen
+  const BUILD = '2026-08-06 08:45';   // bei jedem Deploy hochsetzen
   const SUPABASE_URL = 'https://atzcaxahulifnuvwxcpa.supabase.co';
 
   // ⬇⬇⬇  HIER DEINEN PUBLISHABLE KEY EINSETZEN  ⬇⬇⬇
@@ -1671,11 +1671,42 @@
       const v = arr.map(r => Number(r[key])).filter(x => isFinite(x) && x > 0);
       return v.length ? v.reduce((s, x) => s + x, 0) / v.length : null;
     };
-    const hrvBase = avgOf(base.length >= 5 ? base : VITALS, 'hrv_ms');
-    const hrBase  = avgOf(base.length >= 5 ? base : VITALS, 'resting_hr');
+    const hrvBase   = avgOf(base.length >= 5 ? base : VITALS, 'hrv_ms');
+    const hrBase    = avgOf(base.length >= 5 ? base : VITALS, 'resting_hr');
+    const sleepBase = avgOf(base.length >= 5 ? base : VITALS, 'sleep_total_h');
+    const COL_WARN  = '#e8a020';
+
+    // --- Ampel-Schwellen, relativ zur eigenen Baseline ---
+    //  Bewusst nicht nach Lehrbuchwerten: entscheidend ist die Abweichung
+    //  vom persoenlichen Normalzustand, nicht ein absoluter Zielwert.
+    //  HRV      hoch = erholt  -> Abweichung nach UNTEN ist das Warnsignal
+    //  Ruhepuls hoch = belastet -> Abweichung nach OBEN ist das Warnsignal
+    //  Schlaf   kurz = schlecht -> Abweichung nach UNTEN ist das Warnsignal
+    function ampelHrv(v, b) {
+      if (!b || !isFinite(v)) return COL_MUTED;
+      const dev = (v - b) / b;
+      if (dev < -0.20) return COL_BAD;    // deutlich unter Normal
+      if (dev < -0.08) return COL_WARN;   // leicht unter Normal
+      return COL_GOOD;
+    }
+    function ampelHr(v, b) {
+      if (!b || !isFinite(v)) return COL_MUTED;
+      const d = v - b;
+      if (d > 6) return COL_BAD;          // klar erhoeht
+      if (d > 2) return COL_WARN;         // leicht erhoeht, nach Training normal
+      return COL_GOOD;                    // im Schnitt oder darunter
+    }
+    function ampelSleep(v, b) {
+      if (!b || !isFinite(v)) return COL_MUTED;
+      const d = v - b;
+      if (d < -1.0) return COL_BAD;
+      if (d < -0.3) return COL_WARN;
+      return COL_GOOD;
+    }
 
     const last = rows[rows.length - 1];
     const hrvNow = Number(last.hrv_ms);
+    const sleepNow = Number(last.sleep_total_h);
 
     // Ruhepuls: den LAUFENDEN Tag ueberspringen. Apple berechnet ihn aus
     // dem Tagesverlauf und korrigiert ihn nachts nach unten — am 05.08.
@@ -1691,25 +1722,56 @@
       .find(r => r.day !== todayIso && isFinite(Number(r.resting_hr)) && Number(r.resting_hr) > 0);
     const hrNow = hrRow ? Number(hrRow.resting_hr) : NaN;
 
-    // --- Kopfzeile: aktueller Zustand gegen Baseline ---
+    const cHrv   = ampelHrv(hrvNow, hrvBase);
+    const cHr    = ampelHr(hrNow, hrBase);
+    const cSleep = ampelSleep(sleepNow, sleepBase);
+
+    // --- Gesamtstatus: die schlechteste Einzelampel gibt den Ton an ---
     let statusTxt = 'Baseline wird aufgebaut', statusCol = COL_MUTED;
-    if (hrvBase && isFinite(hrvNow) && base.length >= 5) {
-      const dev = (hrvNow - hrvBase) / hrvBase;
-      if (dev < -0.15) { statusTxt = 'HRV unter Baseline — Belastung zurücknehmen'; statusCol = COL_BAD; }
-      else if (dev > 0.10) { statusTxt = 'gut erholt'; statusCol = COL_GOOD; }
-      else { statusTxt = 'im Normalbereich'; statusCol = COL_MUTED; }
+    if (base.length >= 5) {
+      const cols = [cHrv, cHr, cSleep];
+      if (cols.includes(COL_BAD)) {
+        statusCol = COL_BAD;
+        statusTxt = cHrv === COL_BAD ? 'HRV unter Baseline — Belastung zurücknehmen'
+                  : cHr  === COL_BAD ? 'Ruhepuls deutlich erhöht — Tag ruhig angehen'
+                  : 'zu wenig Schlaf';
+      } else if (cols.includes(COL_WARN)) {
+        statusCol = COL_WARN;
+        statusTxt = 'leicht belastet';
+      } else {
+        statusCol = COL_GOOD;
+        statusTxt = 'gut erholt';
+      }
     }
     ctx.fillStyle = statusCol;
-    ctx.font = 'bold 10px DM Mono, monospace';
-    ctx.fillText(statusTxt, W / 2, 12);
+    ctx.font = 'bold 11px DM Mono, monospace';
+    ctx.fillText(statusTxt, W / 2, 13);
 
-    const parts = [];
-    if (isFinite(hrvNow)) parts.push('HRV ' + Math.round(hrvNow) + ' ms');
-    if (isFinite(hrNow))  parts.push('Ruhepuls ' + Math.round(hrNow));
-    if (last.sleep_total_h) parts.push('Schlaf ' + Number(last.sleep_total_h).toFixed(1).replace('.', ',') + ' h');
-    ctx.fillStyle = COL_MUTED;
-    ctx.font = '9px DM Mono, monospace';
-    ctx.fillText(parts.join('  ·  '), W / 2, 26);
+    // --- Detailzeile, jeder Wert in seiner eigenen Ampelfarbe ---
+    const segs = [];
+    if (isFinite(hrvNow))   segs.push({ t: 'HRV ' + Math.round(hrvNow) + ' ms', c: cHrv });
+    if (isFinite(hrNow))    segs.push({ t: 'Ruhepuls ' + Math.round(hrNow),     c: cHr });
+    if (isFinite(sleepNow)) segs.push({ t: 'Schlaf ' + sleepNow.toFixed(1).replace('.', ',') + ' h', c: cSleep });
+    if (segs.length) {
+      ctx.font = 'bold 9px DM Mono, monospace';
+      const sep = '  ·  ';
+      const wSep = ctx.measureText(sep).width;
+      const total = segs.reduce((sum, sg) => sum + ctx.measureText(sg.t).width, 0)
+                  + wSep * (segs.length - 1);
+      let x = W / 2 - total / 2;
+      ctx.textAlign = 'left';
+      segs.forEach((sg, i) => {
+        ctx.fillStyle = sg.c;
+        ctx.fillText(sg.t, x, 27);
+        x += ctx.measureText(sg.t).width;
+        if (i < segs.length - 1) {
+          ctx.fillStyle = COL_MUTED;
+          ctx.fillText(sep, x, 27);
+          x += wSep;
+        }
+      });
+      ctx.textAlign = 'center';
+    }
 
     // --- HRV-Verlauf als Linie, Baseline gestrichelt ---
     const padX = 10, yTop = 46, yBot = 132;
@@ -1746,6 +1808,21 @@
       pts.forEach((p, i) => {
         ctx.beginPath(); ctx.arc(p.x, p.y, i === pts.length - 1 ? 4 : 2.5, 0, Math.PI * 2);
         ctx.fillStyle = COL_HRV; ctx.fill();
+      });
+      // Werte an den Punkten. Labels abwechselnd ueber und unter den Punkt
+      // setzen, sonst ueberlappen sie bei eng beieinander liegenden Werten.
+      ctx.font = '7px DM Mono, monospace';
+      pts.forEach((p, i) => {
+        const isLast = i === pts.length - 1;
+        if (isLast) return;
+        const prev = pts[i - 1], next = pts[i + 1];
+        // nach oben, wenn der Punkt ein lokales Maximum ist (Linie laeuft
+        // darunter), sonst nach unten — so kreuzt das Label nie die Linie
+        const up = (!prev || p.y <= prev.y) && (!next || p.y <= next.y);
+        ctx.fillStyle = 'rgba(167,139,250,0.75)';
+        ctx.fillText(String(Math.round(p.v)),
+                     Math.max(10, Math.min(p.x, W - 10)),
+                     up ? p.y - 7 : p.y + 12);
       });
       if (pts.length) {
         const p = pts[pts.length - 1];
