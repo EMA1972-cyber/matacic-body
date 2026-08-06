@@ -958,7 +958,7 @@
   // ============================================================
   //  KONFIGURATION
   // ============================================================
-  const BUILD = '2026-08-06 07:40';   // bei jedem Deploy hochsetzen
+  const BUILD = '2026-08-06 08:20';   // bei jedem Deploy hochsetzen
   const SUPABASE_URL = 'https://atzcaxahulifnuvwxcpa.supabase.co';
 
   // ⬇⬇⬇  HIER DEINEN PUBLISHABLE KEY EINSETZEN  ⬇⬇⬇
@@ -1676,7 +1676,20 @@
 
     const last = rows[rows.length - 1];
     const hrvNow = Number(last.hrv_ms);
-    const hrNow  = Number(last.resting_hr);
+
+    // Ruhepuls: den LAUFENDEN Tag ueberspringen. Apple berechnet ihn aus
+    // dem Tagesverlauf und korrigiert ihn nachts nach unten — am 05.08.
+    // stand abends 67, endgueltig waren es 59. Ein halber Tag mit Training
+    // liefert also systematisch zu hohe Werte und wuerde falschen Alarm
+    // ausloesen. Wir nehmen den letzten abgeschlossenen Tag mit Wert.
+    const todayIso = (function () {
+      const d = new Date();
+      return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0')
+             + '-' + String(d.getDate()).padStart(2, '0');
+    })();
+    const hrRow = rows.slice().reverse()
+      .find(r => r.day !== todayIso && isFinite(Number(r.resting_hr)) && Number(r.resting_hr) > 0);
+    const hrNow = hrRow ? Number(hrRow.resting_hr) : NaN;
 
     // --- Kopfzeile: aktueller Zustand gegen Baseline ---
     let statusTxt = 'Baseline wird aufgebaut', statusCol = COL_MUTED;
@@ -1787,7 +1800,10 @@
       ctx.fillStyle = diff > 3 ? COL_BAD : (diff < -2 ? COL_GOOD : COL_MUTED);
       ctx.font = '9px DM Mono, monospace';
       ctx.fillText('Ruhepuls ' + Math.round(hrNow) + ' · Ø ' + Math.round(hrBase)
-        + ' (' + (diff >= 0 ? '+' : '−') + Math.abs(diff).toFixed(0) + ')', W / 2, H - 8);
+        + ' (' + (diff >= 0 ? '+' : '−') + Math.abs(diff).toFixed(0) + ')'
+        + (hrRow && hrRow.day !== rows[rows.length - 1].day
+            ? ' · Stand ' + hrRow.day.slice(8) + '.' + hrRow.day.slice(5, 7) + '.' : ''),
+        W / 2, H - 8);
     }
   }
 
