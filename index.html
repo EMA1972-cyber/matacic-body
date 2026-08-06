@@ -958,7 +958,7 @@
   // ============================================================
   //  KONFIGURATION
   // ============================================================
-  const BUILD = '2026-08-06 08:45';   // bei jedem Deploy hochsetzen
+  const BUILD = '2026-08-06 09:10';   // bei jedem Deploy hochsetzen
   const SUPABASE_URL = 'https://atzcaxahulifnuvwxcpa.supabase.co';
 
   // ⬇⬇⬇  HIER DEINEN PUBLISHABLE KEY EINSETZEN  ⬇⬇⬇
@@ -1696,13 +1696,10 @@
       if (d > 2) return COL_WARN;         // leicht erhoeht, nach Training normal
       return COL_GOOD;                    // im Schnitt oder darunter
     }
-    function ampelSleep(v, b) {
-      if (!b || !isFinite(v)) return COL_MUTED;
-      const d = v - b;
-      if (d < -1.0) return COL_BAD;
-      if (d < -0.3) return COL_WARN;
-      return COL_GOOD;
-    }
+    // Schlafdauer bewusst OHNE Ampel: eine Baseline aus dem eigenen
+    // Schnitt waere zirkulaer (wer immer 5 h schlaeft, waere immer gruen),
+    // und allgemeine Richtwerte (7-9 h) streuen individuell zu stark.
+    // Was die Nacht gebracht hat, steht ohnehin in der HRV.
 
     const last = rows[rows.length - 1];
     const hrvNow = Number(last.hrv_ms);
@@ -1724,17 +1721,16 @@
 
     const cHrv   = ampelHrv(hrvNow, hrvBase);
     const cHr    = ampelHr(hrNow, hrBase);
-    const cSleep = ampelSleep(sleepNow, sleepBase);
+    const cSleep = COL_SLEEP;   // neutral, keine Wertung
 
     // --- Gesamtstatus: die schlechteste Einzelampel gibt den Ton an ---
     let statusTxt = 'Baseline wird aufgebaut', statusCol = COL_MUTED;
     if (base.length >= 5) {
-      const cols = [cHrv, cHr, cSleep];
+      const cols = [cHrv, cHr];   // Schlaf geht bewusst nicht ein
       if (cols.includes(COL_BAD)) {
         statusCol = COL_BAD;
         statusTxt = cHrv === COL_BAD ? 'HRV unter Baseline — Belastung zurücknehmen'
-                  : cHr  === COL_BAD ? 'Ruhepuls deutlich erhöht — Tag ruhig angehen'
-                  : 'zu wenig Schlaf';
+                  : 'Ruhepuls deutlich erhöht — Tag ruhig angehen';
       } else if (cols.includes(COL_WARN)) {
         statusCol = COL_WARN;
         statusTxt = 'leicht belastet';
@@ -1833,7 +1829,7 @@
     }
 
     // --- Schlafbalken unten: Tiefschlaf gefuellt, Rest als Kontur ---
-    const bY = 160, bH = 26;
+    const bY = 156, bH = 24;
     const slotB = (W - padX * 2) / rows.length;
     const bw = Math.min(slotB * 0.6, 26);
     const maxSleep = Math.max(7, ...rows.map(r => Number(r.sleep_total_h) || 0));
@@ -1851,10 +1847,27 @@
         ctx.beginPath(); ctx.roundRect(cx - bw / 2, bY + bH - hDeep, bw, hDeep, 2); ctx.fill();
       }
     });
+    // Zahlen an die Balken: auf dem Handy sind 14 schmale Balken sonst
+    // kaum zu unterscheiden. Oben die Gesamtstunden, unten der Tiefschlaf
+    // in Minuten — die Balkenhoehe allein traegt die Information nicht.
+    ctx.font = '7px DM Mono, monospace';
+    rows.forEach((r, i) => {
+      const cx = padX + slotB * i + slotB / 2;
+      const tot = Number(r.sleep_total_h), deep = Number(r.sleep_deep_h);
+      if (!isFinite(tot) || tot <= 0) return;
+      const hTot = tot / maxSleep * bH;
+      ctx.fillStyle = 'rgba(255,255,255,0.55)';
+      ctx.fillText(tot.toFixed(1).replace('.', ','), cx, bY + bH - hTot - 4);
+      if (isFinite(deep) && deep > 0) {
+        ctx.fillStyle = COL_SLEEP;
+        ctx.fillText(Math.round(deep * 60) + '\u2032', cx, bY + bH + 9);
+      }
+    });
+
     ctx.fillStyle = COL_MUTED;
     ctx.font = '8px DM Mono, monospace';
     ctx.textAlign = 'left';
-    ctx.fillText('SCHLAF — gefüllt = Tiefschlaf', padX, bY - 6);
+    ctx.fillText('SCHLAF h  ·  Tiefschlaf min', padX, bY - 6);
     ctx.textAlign = 'center';
 
     // --- Datums-Labels ---
@@ -1868,13 +1881,13 @@
       ctx.fillStyle = i === rows.length - 1 ? '#e8a020' : COL_MUTED;
       ctx.font = (i === rows.length - 1 ? 'bold ' : '') + '8px DM Mono, monospace';
       ctx.fillText(String(d.getDate()).padStart(2, '0') + '.'
-                 + String(d.getMonth() + 1).padStart(2, '0'), cx, bY + bH + 14);
+                 + String(d.getMonth() + 1).padStart(2, '0'), cx, bY + bH + 20);
     });
 
     // --- Ruhepuls klein darunter, nur wenn Baseline steht ---
     if (hrBase && isFinite(hrNow) && base.length >= 5) {
-      const diff = hrNow - hrBase;
-      ctx.fillStyle = diff > 3 ? COL_BAD : (diff < -2 ? COL_GOOD : COL_MUTED);
+      const diff = Math.round(hrNow) - Math.round(hrBase);
+      ctx.fillStyle = cHr;   // identisch zur Kopfzeile
       ctx.font = '9px DM Mono, monospace';
       ctx.fillText('Ruhepuls ' + Math.round(hrNow) + ' · Ø ' + Math.round(hrBase)
         + ' (' + (diff >= 0 ? '+' : '−') + Math.abs(diff).toFixed(0) + ')'
