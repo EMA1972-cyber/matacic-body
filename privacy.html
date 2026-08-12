@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<link rel="apple-touch-icon" href="icon.png">
+<link rel="icon" type="image/png" href="favicon.png">
+<meta name="color-scheme" content="only light">
+<title>EMA Body — Datenschutz</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f4f6f9;
+    --surface: #13131a;
+    --border: #2a2a38;
+    --accent: #60f0a0;
+    --text: #e8e8f0;
+    --muted: #6a6a80;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { background: #f4f6f9 !important; }
+  body {
+    background: #f4f6f9 !important;
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    min-height: 100vh;
+    padding: 24px 16px 80px;
+  }
+  .wrap { max-width: 720px; margin: 0 auto; }
+  h1 {
+    font-family: 'DM Serif Display', serif;
+    color: #1a56db;
+    font-size: 26px;
+    text-align: center;
+    margin-bottom: 6px;
+  }
+  .sub {
+    text-align: center;
+    color: var(--muted);
+    font-size: 11px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin-bottom: 28px;
+  }
+  section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+  h2 {
+    color: #e8a020;
+    font-size: 12px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+    font-weight: 500;
+  }
+  p { font-size: 13px; line-height: 1.7; margin-bottom: 10px; color: var(--text); }
+  p:last-child { margin-bottom: 0; }
+  ul { margin: 8px 0 10px 18px; }
+  li { font-size: 13px; line-height: 1.7; margin-bottom: 4px; }
+  strong { color: var(--accent); font-weight: 500; }
+  a { color: #5bc8f5; }
+  footer {
+    text-align: center;
+    color: var(--muted);
+    font-size: 10px;
+    letter-spacing: 1px;
+    margin-top: 24px;
+    text-transform: uppercase;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>EMA Body</h1>
+  <div class="sub">Datenschutzerklärung</div>
+
+  <section>
+    <h2>Zweck</h2>
+    <p>EMA Body ist eine <strong>private Anwendung für eine einzige Person</strong> — den Betreiber selbst. Sie wird nicht öffentlich angeboten, nicht vermarktet und hat keine weiteren Nutzer. Sie führt die Gesundheitsdaten des Betreibers aus mehreren Quellen zusammen und stellt sie auf einer privaten Seite dar.</p>
+  </section>
+
+  <section>
+    <h2>Welche Daten verarbeitet werden</h2>
+    <p>Ausschließlich Daten des Betreibers, abgerufen über die APIs der jeweiligen Anbieter nach ausdrücklicher Autorisierung:</p>
+    <ul>
+      <li>Körpermesswerte (Gewicht, Körperzusammensetzung)</li>
+      <li>Erholungs- und Schlafdaten (HRV, Ruhepuls, Atemfrequenz, Schlafphasen)</li>
+      <li>Aktivitätsdaten (Trainingseinheiten, Belastung, Energieverbrauch)</li>
+      <li>Ernährungsdaten (Kalorien, Makronährstoffe, Trinkmenge)</li>
+    </ul>
+    <p>Es werden <strong>keine Daten anderer Personen</strong> verarbeitet.</p>
+  </section>
+
+  <section>
+    <h2>Speicherung</h2>
+    <p>Die Daten liegen in einer <strong>privaten Supabase-Instanz</strong> (Postgres, Rechenzentrum eu-central-1, Frankfurt) unter alleiniger Kontrolle des Betreibers. Zugriffstokens der angebundenen Dienste werden serverseitig gespeichert und sind von außen nicht abrufbar.</p>
+    <p>Schreibzugriff auf die Datenbank haben ausschließlich die serverseitigen Funktionen. Die Darstellungsseite liest lesend über einen öffentlichen Schlüssel mit eingeschränkten Rechten.</p>
+  </section>
+
+  <section>
+    <h2>Weitergabe</h2>
+    <p><strong>Es findet keine Weitergabe statt.</strong> Die Daten werden nicht verkauft, nicht vermietet, nicht an Dritte übermittelt, nicht für Werbung genutzt und nicht zu Analysezwecken ausgewertet, die über die persönliche Nutzung hinausgehen.</p>
+  </section>
+
+  <section>
+    <h2>Widerruf</h2>
+    <p>Der Zugriff auf angebundene Dienste kann jederzeit in der jeweiligen Anbieter-App oder im Anbieter-Konto widerrufen werden. Danach werden keine weiteren Daten abgerufen. Bereits gespeicherte Daten können vom Betreiber jederzeit vollständig gelöscht werden.</p>
+  </section>
+
+  <section>
+    <h2>Verantwortlich</h2>
+    <p>Edvin Matacic<br>Kontakt: <a href="mailto:edvin@matacic.com">edvin@matacic.com</a></p>
+  </section>
+
+  <footer>Stand 12.08.2026</footer>
+
+</div>
+</body>
+</html>
