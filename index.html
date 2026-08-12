@@ -940,7 +940,7 @@
 
 <!-- WHOOP — vorlaeufig, waehrend der Testphase -->
 <div class="chart-wrap" id="whoopWrap" style="display:none;">
-  <div class="chart-title">Whoop <span style="color:var(--muted); letter-spacing:0.1em;">· Test</span></div>
+  <div class="chart-title">Whoop <span style="color:var(--muted); letter-spacing:0.1em;">· Test</span><span id="whoopDay" style="color:var(--muted); letter-spacing:0.1em;"></span></div>
   <div id="whoopBody"></div>
 </div>
 
@@ -993,7 +993,7 @@
   // ============================================================
   //  KONFIGURATION
   // ============================================================
-  const BUILD = '2026-08-12 10:40';   // bei jedem Deploy hochsetzen
+  const BUILD = '2026-08-12 11:05';   // bei jedem Deploy hochsetzen
   const SUPABASE_URL = 'https://atzcaxahulifnuvwxcpa.supabase.co';
 
   // ⬇⬇⬇  HIER DEINEN PUBLISHABLE KEY EINSETZEN  ⬇⬇⬇
@@ -1713,9 +1713,14 @@
     // Ehrlichkeit vor Optik: der laufende Tag ist unvollstaendig, und
     // solange Whoop kalibriert, sind die Werte gegen Bevoelkerungsdaten
     // gerechnet — nicht gegen die eigene Baseline.
-    let note = 'Stand ' + fmtDate(last.day);
-    if (istHeute) note += ' · Belastung und Umsatz laufen noch';
-    note += '<br>HRV als RMSSD — nicht mit dem Regenerationsblock (SDNN) vergleichbar';
+    const dayEl = document.getElementById('whoopDay');
+    if (dayEl) {
+      dayEl.textContent = ' · ' + fmtDate(last.day) + (istHeute ? ' (heute)' : '');
+    }
+
+    let note = '';
+    if (istHeute) note += 'Belastung, Umsatz und Bilanz laufen noch<br>';
+    note += 'HRV als RMSSD — nicht mit dem Regenerationsblock (SDNN) vergleichbar';
     html += '<div class="wh-note">' + note + '</div>';
 
     body.innerHTML = html;
