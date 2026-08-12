@@ -684,6 +684,35 @@
 
   .chart-wrap { position: relative; }
 
+  /* WHOOP — vorlaeufiger Testblock */
+  .wh-hero {
+    display: flex; align-items: baseline; justify-content: center;
+    gap: 10px; margin: 4px 0 14px;
+  }
+  .wh-hero-val { font-size: 2.6rem; line-height: 1; font-weight: 500; }
+  .wh-hero-unit { font-size: 1rem; color: var(--muted); }
+  .wh-hero-lbl {
+    text-align: center; font-size: 0.55rem; letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--muted); margin-top: -8px; margin-bottom: 16px;
+  }
+  .wh-grid { display: grid; gap: 8px; margin-bottom: 8px; }
+  .wh-4 { grid-template-columns: repeat(4, 1fr); }
+  .wh-3 { grid-template-columns: repeat(3, 1fr); }
+  .wh-cell {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 10px; padding: 9px 4px; text-align: center;
+  }
+  .wh-cell-lbl {
+    font-size: 0.48rem; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--muted); margin-bottom: 4px;
+  }
+  .wh-cell-val { font-size: 0.95rem; font-weight: 500; }
+  .wh-cell-sub { font-size: 0.48rem; color: var(--muted); margin-top: 2px; }
+  .wh-note {
+    font-size: 0.5rem; line-height: 1.6; color: var(--muted);
+    text-align: center; margin-top: 12px; letter-spacing: 0.04em;
+  }
+
   /* SHORTCUT HINT */
   .hint {
     background: var(--surface);
@@ -909,6 +938,12 @@
   <canvas id="regenChart"></canvas>
 </div>
 
+<!-- WHOOP — vorlaeufig, waehrend der Testphase -->
+<div class="chart-wrap" id="whoopWrap" style="display:none;">
+  <div class="chart-title">Whoop <span style="color:var(--muted); letter-spacing:0.1em;">· Test</span></div>
+  <div id="whoopBody"></div>
+</div>
+
 <!-- TABLE -->
 <div class="table-wrap">
   <div class="table-header" onclick="toggleTable()">
@@ -958,7 +993,7 @@
   // ============================================================
   //  KONFIGURATION
   // ============================================================
-  const BUILD = '2026-08-06 09:10';   // bei jedem Deploy hochsetzen
+  const BUILD = '2026-08-12 10:40';   // bei jedem Deploy hochsetzen
   const SUPABASE_URL = 'https://atzcaxahulifnuvwxcpa.supabase.co';
 
   // ⬇⬇⬇  HIER DEINEN PUBLISHABLE KEY EINSETZEN  ⬇⬇⬇
@@ -1583,6 +1618,109 @@
   // ============================================================
   //  START
   // ============================================================
+  // ============================================================
+  //  WHOOP — VORLAEUFIG (Testphase seit 10.08.2026)
+  // ============================================================
+  //  Bewusst ein eigener Block und eine eigene Tabelle (whoop_daily).
+  //  Die HRV kommt hier als RMSSD, im Regenerationsblock als SDNN von
+  //  Apple — die beiden Skalen duerfen NICHT in einen Topf. Deshalb
+  //  keine gemeinsame Kurve, keine gemeinsame Baseline.
+  //
+  //  Faellt die Entscheidung gegen Whoop, wird dieser Block ersatzlos
+  //  geloescht. Faellt sie dafuer, ersetzt er den Regenerationsblock.
+  let WHOOP = [];
+
+  async function fetchWhoop() {
+    const url = SUPABASE_URL + '/rest/v1/whoop_daily?select=*&order=day.asc';
+    const res = await fetch(url, {
+      headers: { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + SUPABASE_KEY },
+    });
+    if (!res.ok) return [];
+    return await res.json();
+  }
+
+  function whNum(v, dec, suffix) {
+    if (v === null || v === undefined || v === '') return '–';
+    const n = Number(v);
+    if (isNaN(n)) return '–';
+    return n.toFixed(dec === undefined ? 0 : dec).replace('.', ',') + (suffix || '');
+  }
+
+  function whCell(lbl, val, sub, col) {
+    return '<div class="wh-cell">'
+      + '<div class="wh-cell-lbl">' + lbl + '</div>'
+      + '<div class="wh-cell-val" style="color:' + (col || 'var(--text)') + ';">' + val + '</div>'
+      + (sub ? '<div class="wh-cell-sub">' + sub + '</div>' : '')
+      + '</div>';
+  }
+
+  function drawWhoop() {
+    const wrap = document.getElementById('whoopWrap');
+    const body = document.getElementById('whoopBody');
+    if (!wrap || !body) return;
+    if (!WHOOP.length) { wrap.style.display = 'none'; return; }
+    wrap.style.display = '';
+
+    const last = WHOOP[WHOOP.length - 1];
+    const heute = new Date().toISOString().slice(0, 10);
+    const istHeute = last.day === heute;
+
+    // Whoops eigene Erholungs-Baender. Bewusst NICHT umgedeutet.
+    const rec = last.recovery_score === null ? null : Number(last.recovery_score);
+    let recCol = 'var(--muted)';
+    if (rec !== null) {
+      recCol = rec >= 67 ? '#3dd68c' : (rec >= 34 ? '#d4880a' : '#d63b3b');
+    }
+
+    // Bilanz nach Whoop: Aufnahme minus Gesamtumsatz.
+    // Gleiche Vorzeichen-Konvention wie im Bilanzblock: Defizit ist NEGATIV.
+    let bilanz = null;
+    const n = NUTRITION.find(function (x) { return x.day === last.day; });
+    if (n && n.kcal_in && last.kcal_out_whoop) {
+      bilanz = Number(n.kcal_in) - Number(last.kcal_out_whoop);
+    }
+    const bilCol = bilanz === null ? 'var(--muted)'
+                 : (bilanz < 0 ? '#3dd68c' : '#d63b3b');
+
+    let html = '';
+
+    html += '<div class="wh-hero">'
+      + '<span class="wh-hero-val" style="color:' + recCol + ';">'
+      + (rec === null ? '–' : whNum(rec, 0)) + '</span>'
+      + '<span class="wh-hero-unit">%</span></div>'
+      + '<div class="wh-hero-lbl">Erholung</div>';
+
+    html += '<div class="wh-grid wh-4">'
+      + whCell('HRV', whNum(last.hrv_rmssd, 0), 'rmssd', '#a78bfa')
+      + whCell('Ruhepuls', whNum(last.resting_hr, 0), 'bpm', '#f0a060')
+      + whCell('Atmung', whNum(last.respiratory_rate, 1), 'br/min', '#5bc8f5')
+      + whCell('SpO₂', whNum(last.spo2_pct, 1, '%'), '', '#5bc8f5')
+      + '</div>';
+
+    html += '<div class="wh-grid wh-3">'
+      + whCell('Schlaf', whNum(last.sleep_total_h, 1, ' h'), 'gesamt', '#5bc8f5')
+      + whCell('Tief', whNum(last.sleep_deep_h, 1, ' h'), 'sws', '#5bc8f5')
+      + whCell('Leistung', whNum(last.sleep_performance_pct, 0, '%'), '', '#5bc8f5')
+      + '</div>';
+
+    html += '<div class="wh-grid wh-3">'
+      + whCell('Belastung', whNum(last.day_strain, 1), 'strain', '#e8a020')
+      + whCell('Umsatz', whNum(last.kcal_out_whoop, 0), 'kcal gesamt', '#e8a020')
+      + whCell('Bilanz', bilanz === null ? '–' : (bilanz > 0 ? '+' : '') + whNum(bilanz, 0),
+               'kcal', bilCol)
+      + '</div>';
+
+    // Ehrlichkeit vor Optik: der laufende Tag ist unvollstaendig, und
+    // solange Whoop kalibriert, sind die Werte gegen Bevoelkerungsdaten
+    // gerechnet — nicht gegen die eigene Baseline.
+    let note = 'Stand ' + fmtDate(last.day);
+    if (istHeute) note += ' · Belastung und Umsatz laufen noch';
+    note += '<br>HRV als RMSSD — nicht mit dem Regenerationsblock (SDNN) vergleichbar';
+    html += '<div class="wh-note">' + note + '</div>';
+
+    body.innerHTML = html;
+  }
+
   async function init() {
     if (SUPABASE_KEY.startsWith('HIER_')) {
       status('Publishable Key fehlt — bitte im Quelltext eintragen.', true);
@@ -1603,8 +1741,13 @@
       updateTableToggle();
       setTimeout(drawChart, 60);
       fetchNutrition()
-        .then(function (n) { NUTRITION = n; setTimeout(drawBilanz, 60); })
-        .catch(function (e) { console.error('Bilanz:', e); });
+        .then(function (n) {
+          NUTRITION = n;
+          setTimeout(drawBilanz, 60);
+          return fetchWhoop();
+        })
+        .then(function (w) { WHOOP = w || []; drawWhoop(); })
+        .catch(function (e) { console.error('Bilanz/Whoop:', e); });
       status(DATA.length + ' Messungen · Start ' + fmtDate(START.date)
              + ' · Stand ' + fmtDate(DATA[0].date));
     } catch (e) {
@@ -2181,6 +2324,8 @@
     setTimeout(drawBilanz, 60);
     VITALS = await fetchVitals();
     setTimeout(drawRegen, 60);
+    WHOOP = await fetchWhoop();
+    drawWhoop();
     if (START && DATA.length) {
       status(DATA.length + ' Messungen · Start ' + fmtDate(START.date)
              + ' · Stand ' + fmtDate(DATA[0].date));
@@ -2247,6 +2392,9 @@
       .catch(function () {});
     fetchVitals()
       .then(function (v) { VITALS = v; drawRegen(); })
+      .catch(function () {});
+    fetchWhoop()
+      .then(function (w) { WHOOP = w || []; drawWhoop(); })
       .catch(function () {});
   });
 
