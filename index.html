@@ -993,7 +993,7 @@
   // ============================================================
   //  KONFIGURATION
   // ============================================================
-  const BUILD = '2026-08-12 11:45';   // bei jedem Deploy hochsetzen
+  const BUILD = '2026-08-12 13:20';   // bei jedem Deploy hochsetzen
   const SUPABASE_URL = 'https://atzcaxahulifnuvwxcpa.supabase.co';
 
   // ⬇⬇⬇  HIER DEINEN PUBLISHABLE KEY EINSETZEN  ⬇⬇⬇
@@ -1679,7 +1679,11 @@
     if (n && n.kcal_in && last.kcal_out_whoop) {
       bilanz = Number(n.kcal_in) - Number(last.kcal_out_whoop);
     }
-    const bilCol = bilanz === null ? 'var(--muted)'
+    // Ampel NUR fuer abgeschlossene Tage. Der Whoop-Zyklus startet abends
+    // beim Einschlafen — mittags stehen also ~15 h Umsatz gegen ~5 h
+    // Aufnahme. Die Zahl sieht dann systematisch zu gut aus. Gleiche Logik
+    // wie im Bilanzblock: der laufende Tag wird nicht bewertet.
+    const bilCol = (bilanz === null || istHeute) ? 'var(--muted)'
                  : (bilanz < 0 ? '#3dd68c' : '#d63b3b');
 
     let html = '';
@@ -1704,10 +1708,12 @@
       + '</div>';
 
     html += '<div class="wh-grid wh-3">'
-      + whCell('Belastung', whNum(last.day_strain, 1), 'strain', '#e8a020')
-      + whCell('Umsatz', whNum(last.kcal_out_whoop, 0), 'kcal gesamt', '#e8a020')
+      + whCell('Belastung', whNum(last.day_strain, 1), 'strain',
+               istHeute ? 'var(--muted)' : '#e8a020')
+      + whCell('Umsatz', whNum(last.kcal_out_whoop, 0), 'kcal gesamt',
+               istHeute ? 'var(--muted)' : '#e8a020')
       + whCell('Bilanz', bilanz === null ? '–' : (bilanz > 0 ? '+' : '') + whNum(bilanz, 0),
-               'kcal', bilCol)
+               istHeute ? 'unvollständig' : 'kcal', bilCol)
       + '</div>';
 
     // Ehrlichkeit vor Optik: der laufende Tag ist unvollstaendig, und
@@ -1735,7 +1741,8 @@
       }
     }
 
-    if (istHeute) note += 'Belastung, Umsatz und Bilanz laufen noch<br>';
+    if (istHeute) note += 'Zyklus läuft noch — Umsatz zählt seit gestern Abend, '
+                        + 'Aufnahme erst seit heute früh<br>';
     note += 'HRV als RMSSD — nicht mit dem Regenerationsblock (SDNN) vergleichbar';
     html += '<div class="wh-note">' + note + '</div>';
 
