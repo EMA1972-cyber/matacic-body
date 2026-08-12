@@ -993,7 +993,7 @@
   // ============================================================
   //  KONFIGURATION
   // ============================================================
-  const BUILD = '2026-08-12 11:05';   // bei jedem Deploy hochsetzen
+  const BUILD = '2026-08-12 11:45';   // bei jedem Deploy hochsetzen
   const SUPABASE_URL = 'https://atzcaxahulifnuvwxcpa.supabase.co';
 
   // ⬇⬇⬇  HIER DEINEN PUBLISHABLE KEY EINSETZEN  ⬇⬇⬇
@@ -1719,6 +1719,22 @@
     }
 
     let note = '';
+
+    // Whoop rechnet die Kalorien mit dem Gewicht aus SEINEM Profil, nicht
+    // mit dem aus Apple Health importierten. Das muss man von Hand
+    // nachziehen — also aktiv melden, sobald es auseinanderlaeuft.
+    const waage = (DATA && DATA.length) ? DATA[0].weight : null;
+    const prof = WHOOP.map(function (r) { return r.profile_weight_kg; })
+                      .filter(function (v) { return v !== null && v !== undefined; }).pop();
+    if (waage !== null && prof !== undefined) {
+      const diff = waage - Number(prof);
+      if (Math.abs(diff) >= 1.5) {
+        note += '<span style="color:#d4880a;">Whoop rechnet mit ' + whNum(prof, 1, ' kg')
+             + ', die Waage sagt ' + whNum(waage, 1, ' kg')
+             + ' — im Whoop-Profil nachziehen</span><br>';
+      }
+    }
+
     if (istHeute) note += 'Belastung, Umsatz und Bilanz laufen noch<br>';
     note += 'HRV als RMSSD — nicht mit dem Regenerationsblock (SDNN) vergleichbar';
     html += '<div class="wh-note">' + note + '</div>';

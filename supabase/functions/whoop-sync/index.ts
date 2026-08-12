@@ -233,6 +233,24 @@ Deno.serve(async (req) => {
     }
     notes.push('Cycles: ' + (cyc.records || []).length + ' Datensaetze');
 
+    // --- Body Measurement: Whoops Rechengrundlage -------------------------
+    // Aendert sich NUR durch manuelles Nachziehen im Whoop-Profil. Der
+    // Apple-Health-Import fuettert die Trendanzeige, NICHT diese Werte.
+    // Deshalb pro Tag mitschreiben — so wird sichtbar, ab wann die
+    // Kalorienrechnung auf einem veralteten Gewicht steht.
+    try {
+      const bm = await whoopGet('/user/measurement/body', token, {});
+      put(berlinDay(new Date().toISOString()), {
+        profile_weight_kg: round(bm.weight_kilogram, 1),
+        profile_height_m:  round(bm.height_meter, 2),
+        profile_max_hr:    round(bm.max_heart_rate, 0),
+      });
+      notes.push('Profil: ' + bm.weight_kilogram + ' kg · max ' + bm.max_heart_rate + ' bpm');
+    } catch (e) {
+      // Darf den Sync nicht kippen — die Tageswerte sind wichtiger.
+      notes.push('Body-Measurement nicht abrufbar: ' + String(e));
+    }
+
     const rows = Object.keys(byDay).sort().map((d) => {
       byDay[d].updated_at = new Date().toISOString();
       return byDay[d];
