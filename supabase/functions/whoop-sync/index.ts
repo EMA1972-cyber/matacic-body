@@ -218,12 +218,23 @@ Deno.serve(async (req) => {
     notes.push('Recovery: ' + (rec_.records || []).length + ' Datensaetze');
 
     // --- Cycles: Tag = Ende des Zyklus (laufender Zyklus = heute) ---------
+    // ACHTUNG Kollision: Zwischen Einschlafen und Mitternacht fallen ZWEI
+    // Zyklen auf denselben Tag — der eben geschlossene und der neue. Der
+    // neue haette fast keine Werte und wuerde den fertigen Tag ueber-
+    // schreiben. Darum offene Zyklen zuerst, geschlossene danach: der
+    // vollstaendige Tag gewinnt.
     const cyc = await whoopGet('/cycle', token, range);
-    for (const rec of (cyc.records || [])) {
+    const cycles = (cyc.records || []).slice().sort(function (a, b) {
+      return (a.end ? 1 : 0) - (b.end ? 1 : 0);
+    });
+    for (const rec of cycles) {
+      const offen = !rec.end;
       const day = berlinDay(rec.end || new Date().toISOString());
       const s = rec.score || {};
       put(day, {
         cycle_id: String(rec.id),
+        cycle_start: rec.start || null,
+        cycle_open: offen,
         day_strain: round(s.strain, 2),
         avg_hr: round(s.average_heart_rate, 0),
         max_hr: round(s.max_heart_rate, 0),
@@ -231,7 +242,7 @@ Deno.serve(async (req) => {
         kcal_out_whoop: s.kilojoule ? round(s.kilojoule / 4.184, 0) : null,
       });
     }
-    notes.push('Cycles: ' + (cyc.records || []).length + ' Datensaetze');
+    notes.push('Cycles: ' + cycles.length + ' Datensaetze');
 
     // --- Body Measurement: Whoops Rechengrundlage -------------------------
     // Aendert sich NUR durch manuelles Nachziehen im Whoop-Profil. Der

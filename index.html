@@ -993,7 +993,7 @@
   // ============================================================
   //  KONFIGURATION
   // ============================================================
-  const BUILD = '2026-08-12 13:20';   // bei jedem Deploy hochsetzen
+  const BUILD = '2026-08-12 14:00';   // bei jedem Deploy hochsetzen
   const SUPABASE_URL = 'https://atzcaxahulifnuvwxcpa.supabase.co';
 
   // ⬇⬇⬇  HIER DEINEN PUBLISHABLE KEY EINSETZEN  ⬇⬇⬇
@@ -1679,11 +1679,18 @@
     if (n && n.kcal_in && last.kcal_out_whoop) {
       bilanz = Number(n.kcal_in) - Number(last.kcal_out_whoop);
     }
-    // Ampel NUR fuer abgeschlossene Tage. Der Whoop-Zyklus startet abends
-    // beim Einschlafen — mittags stehen also ~15 h Umsatz gegen ~5 h
-    // Aufnahme. Die Zahl sieht dann systematisch zu gut aus. Gleiche Logik
-    // wie im Bilanzblock: der laufende Tag wird nicht bewertet.
-    const bilCol = (bilanz === null || istHeute) ? 'var(--muted)'
+    // Ampel erst, wenn der Zyklus praktisch vollstaendig ist. Der Whoop-
+    // Zyklus startet abends beim Einschlafen — mittags stehen ~15 h Umsatz
+    // gegen ~5 h Aufnahme, die Bilanz sieht dann systematisch zu gut aus.
+    // Ab ~20 h gelaufener Zeit deckt sich der Zyklus weitgehend mit dem
+    // Ernaehrungstag, dann darf bewertet werden. In der Praxis heisst das:
+    // ab dem spaeten Nachmittag.
+    let stdGelaufen = null;
+    if (last.cycle_start) {
+      stdGelaufen = (Date.now() - new Date(last.cycle_start).getTime()) / 3600000;
+    }
+    const reif = !istHeute || (stdGelaufen !== null && stdGelaufen >= 20);
+    const bilCol = (bilanz === null || !reif) ? 'var(--muted)'
                  : (bilanz < 0 ? '#3dd68c' : '#d63b3b');
 
     let html = '';
@@ -1709,11 +1716,11 @@
 
     html += '<div class="wh-grid wh-3">'
       + whCell('Belastung', whNum(last.day_strain, 1), 'strain',
-               istHeute ? 'var(--muted)' : '#e8a020')
+               reif ? '#e8a020' : 'var(--muted)')
       + whCell('Umsatz', whNum(last.kcal_out_whoop, 0), 'kcal gesamt',
-               istHeute ? 'var(--muted)' : '#e8a020')
+               reif ? '#e8a020' : 'var(--muted)')
       + whCell('Bilanz', bilanz === null ? '–' : (bilanz > 0 ? '+' : '') + whNum(bilanz, 0),
-               istHeute ? 'unvollständig' : 'kcal', bilCol)
+               reif ? 'kcal' : 'unvollständig', bilCol)
       + '</div>';
 
     // Ehrlichkeit vor Optik: der laufende Tag ist unvollstaendig, und
@@ -1741,8 +1748,14 @@
       }
     }
 
-    if (istHeute) note += 'Zyklus läuft noch — Umsatz zählt seit gestern Abend, '
-                        + 'Aufnahme erst seit heute früh<br>';
+    if (istHeute && !reif) {
+      const rest = stdGelaufen === null ? null : Math.max(0, 20 - stdGelaufen);
+      note += 'Zyklus läuft seit ' + whNum(stdGelaufen, 1, ' h')
+           + ' — Umsatz zählt seit gestern Abend, Aufnahme erst seit heute früh<br>';
+      if (rest !== null) note += 'Bewertung in ' + whNum(rest, 1, ' h') + '<br>';
+    } else if (istHeute) {
+      note += 'Zyklus läuft seit ' + whNum(stdGelaufen, 1, ' h') + ' — Bilanz belastbar<br>';
+    }
     note += 'HRV als RMSSD — nicht mit dem Regenerationsblock (SDNN) vergleichbar';
     html += '<div class="wh-note">' + note + '</div>';
 
