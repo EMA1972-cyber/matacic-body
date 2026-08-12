@@ -993,7 +993,7 @@
   // ============================================================
   //  KONFIGURATION
   // ============================================================
-  const BUILD = '2026-08-12 14:00';   // bei jedem Deploy hochsetzen
+  const BUILD = '2026-08-12 14:30';   // bei jedem Deploy hochsetzen
   const SUPABASE_URL = 'https://atzcaxahulifnuvwxcpa.supabase.co';
 
   // ⬇⬇⬇  HIER DEINEN PUBLISHABLE KEY EINSETZEN  ⬇⬇⬇
@@ -1672,26 +1672,35 @@
       recCol = rec >= 67 ? '#3dd68c' : (rec >= 34 ? '#d4880a' : '#d63b3b');
     }
 
+    // Belastung, Umsatz und Bilanz beziehen sich bewusst NICHT auf den
+    // laufenden Tag, sondern auf den letzten ABGESCHLOSSENEN Zyklus.
+    // Grund: Der Whoop-Zyklus startet abends beim Einschlafen. Vormittags
+    // stehen ~15 h Umsatz gegen ~5 h Aufnahme — die Bilanz saehe dann
+    // systematisch zu gut aus. Ein fertiger Zyklus deckt dagegen denselben
+    // Zeitraum ab wie der Ernaehrungstag und ist ehrlich vergleichbar.
+    const fertig = WHOOP.filter(function (r) { return r.cycle_open === false; }).pop();
+
     // Bilanz nach Whoop: Aufnahme minus Gesamtumsatz.
     // Gleiche Vorzeichen-Konvention wie im Bilanzblock: Defizit ist NEGATIV.
     let bilanz = null;
-    const n = NUTRITION.find(function (x) { return x.day === last.day; });
-    if (n && n.kcal_in && last.kcal_out_whoop) {
-      bilanz = Number(n.kcal_in) - Number(last.kcal_out_whoop);
+    if (fertig) {
+      const n = NUTRITION.find(function (x) { return x.day === fertig.day; });
+      if (n && n.kcal_in && fertig.kcal_out_whoop) {
+        bilanz = Number(n.kcal_in) - Number(fertig.kcal_out_whoop);
+      }
     }
-    // Ampel erst, wenn der Zyklus praktisch vollstaendig ist. Der Whoop-
-    // Zyklus startet abends beim Einschlafen — mittags stehen ~15 h Umsatz
-    // gegen ~5 h Aufnahme, die Bilanz sieht dann systematisch zu gut aus.
-    // Ab ~20 h gelaufener Zeit deckt sich der Zyklus weitgehend mit dem
-    // Ernaehrungstag, dann darf bewertet werden. In der Praxis heisst das:
-    // ab dem spaeten Nachmittag.
-    let stdGelaufen = null;
-    if (last.cycle_start) {
-      stdGelaufen = (Date.now() - new Date(last.cycle_start).getTime()) / 3600000;
+
+    // Dreifarbige Ampel — und sie warnt in BEIDE Richtungen.
+    // Ein sehr grosses Defizit bekommt bewusst kein Gruen: bei taeglichem
+    // Training kostet das Muskelmasse statt Fett. Die Ampel soll nicht
+    // belohnen, je weniger gegessen wurde.
+    let bilCol = 'var(--muted)';
+    if (bilanz !== null) {
+      const defizit = -bilanz;                     // positiv = Defizit
+      if (defizit >= 200 && defizit <= 800)      bilCol = '#3dd68c';   // gruen
+      else if (defizit > 0)                      bilCol = '#d4880a';   // gelb
+      else                                       bilCol = '#d63b3b';   // rot
     }
-    const reif = !istHeute || (stdGelaufen !== null && stdGelaufen >= 20);
-    const bilCol = (bilanz === null || !reif) ? 'var(--muted)'
-                 : (bilanz < 0 ? '#3dd68c' : '#d63b3b');
 
     let html = '';
 
@@ -1714,13 +1723,17 @@
       + whCell('Leistung', whNum(last.sleep_performance_pct, 0, '%'), '', '#5bc8f5')
       + '</div>';
 
+    html += '<div style="text-align:center; font-size:0.48rem; letter-spacing:0.12em;'
+      + ' text-transform:uppercase; color:var(--muted); margin:14px 0 6px;">'
+      + 'Letzter abgeschlossener Tag'
+      + (fertig ? ' · ' + fmtDate(fertig.day) : '')
+      + '</div>';
+
     html += '<div class="wh-grid wh-3">'
-      + whCell('Belastung', whNum(last.day_strain, 1), 'strain',
-               reif ? '#e8a020' : 'var(--muted)')
-      + whCell('Umsatz', whNum(last.kcal_out_whoop, 0), 'kcal gesamt',
-               reif ? '#e8a020' : 'var(--muted)')
+      + whCell('Belastung', fertig ? whNum(fertig.day_strain, 1) : '–', 'strain', '#e8a020')
+      + whCell('Umsatz', fertig ? whNum(fertig.kcal_out_whoop, 0) : '–', 'kcal gesamt', '#e8a020')
       + whCell('Bilanz', bilanz === null ? '–' : (bilanz > 0 ? '+' : '') + whNum(bilanz, 0),
-               reif ? 'kcal' : 'unvollständig', bilCol)
+               'kcal', bilCol)
       + '</div>';
 
     // Ehrlichkeit vor Optik: der laufende Tag ist unvollstaendig, und
@@ -1748,14 +1761,7 @@
       }
     }
 
-    if (istHeute && !reif) {
-      const rest = stdGelaufen === null ? null : Math.max(0, 20 - stdGelaufen);
-      note += 'Zyklus läuft seit ' + whNum(stdGelaufen, 1, ' h')
-           + ' — Umsatz zählt seit gestern Abend, Aufnahme erst seit heute früh<br>';
-      if (rest !== null) note += 'Bewertung in ' + whNum(rest, 1, ' h') + '<br>';
-    } else if (istHeute) {
-      note += 'Zyklus läuft seit ' + whNum(stdGelaufen, 1, ' h') + ' — Bilanz belastbar<br>';
-    }
+    if (istHeute) note += 'Erholung und Schlaf von heute Nacht<br>';
     note += 'HRV als RMSSD — nicht mit dem Regenerationsblock (SDNN) vergleichbar';
     html += '<div class="wh-note">' + note + '</div>';
 
