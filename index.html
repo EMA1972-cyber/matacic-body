@@ -930,11 +930,6 @@
 <div class="chart-wrap">
   <div class="chart-title">Bilanz</div>
   <canvas id="bilanzChart"></canvas>
-  <div style="text-align:center; font-size:0.48rem; letter-spacing:0.08em; color:var(--muted); margin-top:6px; line-height:1.6;">
-    Umsatz hier aus Google/Apple — beide Quellen seit 17.08. inaktiv,<br>
-    ab jetzt wachsen nur noch Kalorien-Aufnahme &amp; Getraenke nach.<br>
-    Aktueller Umsatz &amp; Bilanz: Whoop-Block unten.
-  </div>
 </div>
 
 <!-- REGENERATION -->
@@ -1002,7 +997,7 @@
   // ============================================================
   //  KONFIGURATION
   // ============================================================
-  const BUILD = '2026-08-17 10:00';   // bei jedem Deploy hochsetzen
+  const BUILD = '2026-08-17 10:30';   // bei jedem Deploy hochsetzen
   const SUPABASE_URL = 'https://atzcaxahulifnuvwxcpa.supabase.co';
 
   // ⬇⬇⬇  HIER DEINEN PUBLISHABLE KEY EINSETZEN  ⬇⬇⬇
@@ -2241,15 +2236,41 @@
     const COL_DRINK = '#5bc8f5', COL_MUTED = '#7a7a85';
     const COL_GOOD = '#3dd68c', COL_BAD = '#d63b3b';
     const COL_TODAY = '#e8a020';
-    const STEP_GOAL = 10000;
-    const BASE_KCAL = 2019;          // Tagesbedarf laut Fddb-Profil
+    const STRAIN_MAX = 21;           // Whoops feste Skala, 0-21
     const padX = 8;
     const slot = (W - padX * 2) / rows.length;
     const barW = Math.min(slot * 0.52, 32);
 
-    // Delta nach Fddb-Logik: Grundumsatz + Sport - Aufnahme
-    const deltaOf = r => (Number(r.kcal_in) > 0 && (r.kcal_google !== null || r.kcal_apple !== null))
-      ? BASE_KCAL + Number(r.kcal_out) - Number(r.kcal_in) : null;
+    // Whoop-Zeilen nach Tag nachschlagbar machen.
+    const whoopByDay = {};
+    WHOOP.forEach(w => { whoopByDay[w.day] = w; });
+
+    // Ein Whoop-Tag gilt nur als verlaesslich, wenn:
+    //  - der Zyklus geschlossen ist ODER es der laufende Tag selbst ist
+    //    (ein offener Zyklus an einem VERGANGENEN Tag ist eine Karteileiche
+    //    aus der Zeit vor dem Kollisions-Fix vom 12.08. — siehe 14.08.)
+    //  - der Umsatz plausibel ist. Unter 1.200 kcal an einem geschlossenen
+    //    Tag ist unterhalb jedes realistischen Grundumsatzes und stammt vom
+    //    unvollstaendigen ersten Sync vor der OAuth-Freigabe (10.08.: 683).
+    function whoopReliable(day) {
+      const w = whoopByDay[day];
+      if (!w || w.kcal_out_whoop === null || w.kcal_out_whoop === undefined) return null;
+      const isToday = day === todayStr;
+      if (w.cycle_open && !isToday) return null;      // Karteileiche
+      if (!isToday && Number(w.kcal_out_whoop) < 1200) return null;  // Erst-Sync-Artefakt
+      return w;
+    }
+
+    // Delta = echter Whoop-Tagesumsatz minus Aufnahme. BASE_KCAL entfaellt
+    // damit vollstaendig — wir schaetzen den Umsatz nicht mehr aus einem
+    // Fddb-Profilwert plus Aktivkalorien, sondern lesen ihn direkt.
+    // Vorzeichen unveraendert: positiv = Defizit (mehr verbraucht als
+    // gegessen), damit Balkenrichtung und Ampel weiter passen.
+    const deltaOf = r => {
+      const w = whoopReliable(r.day);
+      if (!w || !(Number(r.kcal_in) > 0)) return null;
+      return Number(w.kcal_out_whoop) - Number(r.kcal_in);
+    };
     const deltas = rows.map(deltaOf);
     const valid  = past.map(deltaOf).filter(v => v !== null);
     const dAbsMax = Math.max(600, ...valid.map(Math.abs));
@@ -2305,12 +2326,15 @@
       ctx.font = 'bold 10px DM Mono, monospace';
       ctx.fillText('Ø ' + (avgMl / 1000).toFixed(2).replace('.', ',') + ' L Getränke', W / 2, 26);
     }
-    const stepRows = past.filter(r => (r.steps_google !== null || r.steps_apple !== null) && Number(r.steps) > 0);
-    if (stepRows.length) {
-      const avgSt = stepRows.reduce((s, r) => s + Number(r.steps), 0) / stepRows.length;
-      ctx.fillStyle = avgSt >= STEP_GOAL ? COL_GOOD : COL_BAD;
+    // Schritte entfallen: Whoop erfasst sie nicht zuverlaessig (Pad-Test
+    // 15.08.: 132 Schritte in 99 Minuten). Belastung (Strain) ist neutral,
+    // keine Ampel — sie beschreibt, sie bewertet nicht.
+    const strainRows = past.map(r => whoopReliable(r.day)).filter(w => w && w.day_strain !== null);
+    if (strainRows.length) {
+      const avgSr = strainRows.reduce((s, w) => s + Number(w.day_strain), 0) / strainRows.length;
+      ctx.fillStyle = COL_DRINK;
       ctx.font = 'bold 10px DM Mono, monospace';
-      ctx.fillText('Ø ' + Math.round(avgSt).toLocaleString('de-DE') + ' Schritte', W / 2, 40);
+      ctx.fillText('Ø ' + avgSr.toFixed(1).replace('.', ',') + ' Belastung', W / 2, 40);
     }
 
     // --- Nulllinie ---
@@ -2400,7 +2424,7 @@
       ctx.fillText((p.ml / 1000).toFixed(1).replace('.', ',') + ' L', p.x, p.y - 7);
     });
 
-    // --- Tages-Labels + Schritte-Streifen ---
+    // --- Tages-Labels + Belastungs-Streifen (statt Schritte) ---
     const stripW = Math.min(slot * 0.72, 42), stripH = 6, stripY = 214;
     rows.forEach((r, i) => {
       const cx = padX + slot * i + slot / 2;
@@ -2414,22 +2438,22 @@
       ctx.fillText(String(d.getDate()).padStart(2, '0') + '.'
                  + String(d.getMonth() + 1).padStart(2, '0'), cx, 204);
 
-      const hasSteps = r.steps_google !== null || r.steps_apple !== null;
-      const st = hasSteps ? (Number(r.steps) || 0) : 0;
+      const w = whoopReliable(r.day);
+      const sr = w && w.day_strain !== null ? Number(w.day_strain) : 0;
       ctx.fillStyle = 'rgba(255,255,255,0.07)';
       ctx.beginPath();
       ctx.roundRect(cx - stripW / 2, stripY, stripW, stripH, 3);
       ctx.fill();
-      if (st > 0) {
-        const frac = Math.min(st / STEP_GOAL, 1);
-        // laufender Tag: neutralblau statt Ampel — 4.000 Schritte um 10 Uhr
-        // sind kein Misserfolg, der Tag laeuft ja noch
-        ctx.fillStyle = isT ? COL_DRINK : (st >= STEP_GOAL ? COL_GOOD : COL_BAD);
+      if (sr > 0) {
+        const frac = Math.min(sr / STRAIN_MAX, 1);
+        // Immer neutralblau: Belastung beschreibt, sie bewertet nicht —
+        // 18 ist an einem gruenen Tag angemessen und an einem roten zu viel
+        ctx.fillStyle = COL_DRINK;
         ctx.beginPath();
         ctx.roundRect(cx - stripW / 2, stripY, Math.max(3, stripW * frac), stripH, 3);
         ctx.fill();
         ctx.font = 'bold 8px DM Mono, monospace';
-        ctx.fillText(st.toLocaleString('de-DE'), cx, stripY + 17);
+        ctx.fillText(sr.toFixed(1).replace('.', ','), cx, stripY + 17);
       }
     });
   }
