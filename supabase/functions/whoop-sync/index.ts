@@ -44,6 +44,43 @@ function hours(milli: number | null | undefined): number | null {
   return Math.round((milli / 3600000) * 100) / 100;
 }
 
+// Ein Whoop-Zyklus dem Kalendertag zuordnen, an dem der GROESSTE Teil
+// seiner Dauer liegt — nicht dem Tag seines Endzeitpunkts.
+//
+// Grund: Bei sehr spaetem Einschlafen kann ein Zyklus kurz nach
+// Mitternacht enden (z.B. 00:24). berlinDay(end) haette ihn dann komplett
+// dem NEUEN Tag zugeschlagen, obwohl 29 seiner 30 Stunden auf den Vortag
+// entfallen — und der Vortag haette dadurch GAR KEINEN eigenen Zyklus
+// mehr gehabt (14.08.2026 war genau so ein Fall). Gleichzeitig kann der
+// naechste Zyklus AUCH am selben neuen Tag enden, wodurch zwei Zyklen um
+// denselben Tag konkurrieren und sich beim Sync gegenseitig ueberschreiben.
+// Die Mehrheits-Regel loest beide Probleme: jeder Zyklus bekommt genau
+// einen Tag, und es ist der Tag, an dem er tatsaechlich stattfand.
+function majorityDay(startIso: string | null | undefined, endIso: string | null | undefined): string | null {
+  if (!startIso) return null;
+  if (!endIso) return berlinDay(new Date().toISOString());   // offener Zyklus = heute
+
+  const start = new Date(startIso).getTime();
+  const end = new Date(endIso).getTime();
+  if (!isFinite(start) || !isFinite(end) || end <= start) return berlinDay(endIso);
+
+  // In Stundenschritten durchlaufen und pro Kalendertag zaehlen — reicht
+  // fuer eine Tageszuordnung locker aus, Zyklen dauern selten ueber 48h.
+  const tally: Record<string, number> = {};
+  let t = start;
+  while (t < end) {
+    const step = Math.min(3600000, end - t);
+    const day = berlinDay(new Date(t + step / 2).toISOString());   // Zeitpunkt in der Mitte des Schritts
+    if (day) tally[day] = (tally[day] || 0) + step;
+    t += step;
+  }
+  let bestDay: string | null = null, bestMs = -1;
+  for (const d of Object.keys(tally)) {
+    if (tally[d] > bestMs) { bestMs = tally[d]; bestDay = d; }
+  }
+  return bestDay;
+}
+
 function round(v: number | null | undefined, n = 2): number | null {
   if (v === null || v === undefined || isNaN(v)) return null;
   const f = Math.pow(10, n);
@@ -217,19 +254,21 @@ Deno.serve(async (req) => {
     }
     notes.push('Recovery: ' + (rec_.records || []).length + ' Datensaetze');
 
-    // --- Cycles: Tag = Ende des Zyklus (laufender Zyklus = heute) ---------
-    // ACHTUNG Kollision: Zwischen Einschlafen und Mitternacht fallen ZWEI
-    // Zyklen auf denselben Tag — der eben geschlossene und der neue. Der
-    // neue haette fast keine Werte und wuerde den fertigen Tag ueber-
-    // schreiben. Darum offene Zyklen zuerst, geschlossene danach: der
-    // vollstaendige Tag gewinnt.
+    // --- Cycles: Tag = wo der GROESSTE Teil der Zyklusdauer liegt ---------
+    // Nicht mehr "Tag des Endzeitpunkts" — das fuehrte bei sehr spaetem
+    // Einschlafen dazu, dass ein Tag GAR KEINEN eigenen Zyklus bekam
+    // (14.08.2026: Zyklus lief 13.08 18:47 bis 15.08 00:24, wurde aber
+    // komplett dem 15.08 zugeschlagen) UND gleichzeitig zwei Zyklen um
+    // denselben Folgetag konkurrierten. Offene Zyklen zuerst verarbeiten,
+    // geschlossene danach, damit ein vollstaendiger Tag nicht von einem
+    // gerade erst gestarteten neuen Zyklus ueberschrieben wird.
     const cyc = await whoopGet('/cycle', token, range);
     const cycles = (cyc.records || []).slice().sort(function (a, b) {
       return (a.end ? 1 : 0) - (b.end ? 1 : 0);
     });
     for (const rec of cycles) {
       const offen = !rec.end;
-      const day = berlinDay(rec.end || new Date().toISOString());
+      const day = majorityDay(rec.start, rec.end);
       const s = rec.score || {};
       put(day, {
         cycle_id: String(rec.id),
