@@ -999,7 +999,7 @@
   // ============================================================
   //  KONFIGURATION
   // ============================================================
-  const BUILD = '2026-08-17 11:50';   // bei jedem Deploy hochsetzen
+  const BUILD = '2026-08-17 12:10';   // bei jedem Deploy hochsetzen
   const SUPABASE_URL = 'https://atzcaxahulifnuvwxcpa.supabase.co';
 
   // ⬇⬇⬇  HIER DEINEN PUBLISHABLE KEY EINSETZEN  ⬇⬇⬇
@@ -1663,6 +1663,26 @@
       + '</div>';
   }
 
+  // Gemeinsame Ampel-Logik fuer HRV und Ruhepuls — genutzt vom Whoop-Block
+  // UND vom Regenerationsblock, damit ein und derselbe Wert nirgends zwei
+  // verschiedene Farben bekommt. Bewusst relativ zur eigenen Baseline,
+  // nicht nach Lehrbuchwerten (siehe Begruendung weiter unten bei drawRegen).
+  const COL_GOOD_G = '#3dd68c', COL_BAD_G = '#d63b3b', COL_WARN_G = '#e8a020', COL_MUTED_G = '#7a7a85';
+  function ampelHrvG(v, b) {
+    if (!b || !isFinite(v)) return COL_MUTED_G;
+    const dev = (v - b) / b;
+    if (dev < -0.20) return COL_BAD_G;
+    if (dev < -0.08) return COL_WARN_G;
+    return COL_GOOD_G;
+  }
+  function ampelHrG(v, b) {
+    if (!b || !isFinite(v)) return COL_MUTED_G;
+    const d = v - b;
+    if (d > 6) return COL_BAD_G;
+    if (d > 2) return COL_WARN_G;
+    return COL_GOOD_G;
+  }
+
   // Persoenlicher Durchschnitt eines Whoop-Feldes, heutiger Tag
   // ausgenommen (der ist ja noch unvollstaendig und wuerde den Schnitt
   // gegen sich selbst verzerren).
@@ -1710,9 +1730,11 @@
     const avgHrv = whAvg('hrv_rmssd'), avgHr = whAvg('resting_hr'), avgResp = whAvg('respiratory_rate');
     html += '<div class="wh-grid wh-4">'
       + whCell('HRV (rmssd)', whNum(last.hrv_rmssd, 0),
-               avgHrv !== null ? 'Ø ' + whNum(avgHrv, 0) : '–', '#a78bfa')
+               avgHrv !== null ? 'Ø ' + whNum(avgHrv, 0) : '–',
+               ampelHrvG(Number(last.hrv_rmssd), avgHrv))
       + whCell('Ruhepuls (bpm)', whNum(last.resting_hr, 0),
-               avgHr !== null ? 'Ø ' + whNum(avgHr, 0) : '–', '#f0a060')
+               avgHr !== null ? 'Ø ' + whNum(avgHr, 0) : '–',
+               ampelHrG(Number(last.resting_hr), avgHr))
       + whCell('Atmung (br/min)', whNum(last.respiratory_rate, 1),
                avgResp !== null ? 'Ø ' + whNum(avgResp, 1) : '–', '#5bc8f5')
       + whCell('SpO₂ (%)', whNum(last.spo2_pct, 1),
