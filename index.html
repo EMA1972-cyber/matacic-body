@@ -1002,7 +1002,7 @@
   // ============================================================
   //  KONFIGURATION
   // ============================================================
-  const BUILD = '2026-08-17 09:45';   // bei jedem Deploy hochsetzen
+  const BUILD = '2026-08-17 10:00';   // bei jedem Deploy hochsetzen
   const SUPABASE_URL = 'https://atzcaxahulifnuvwxcpa.supabase.co';
 
   // ⬇⬇⬇  HIER DEINEN PUBLISHABLE KEY EINSETZEN  ⬇⬇⬇
@@ -1841,11 +1841,14 @@
   //  hinterherhinkt. Es gibt keine "je hoeher desto besser"-Wertung.
   //
   //  UMSTELLUNG 17.08.2026: Quelle ist ab sofort Whoop (RMSSD), nicht mehr
-  //  die Apple Watch (SDNN). Letzte Apple-Nacht war 14.08. Beide Skalen
-  //  sind NICHT vergleichbar — deshalb werden sie nicht in einer Linie
-  //  gemischt. Die Apple-Historie (u.a. die Wacken-Kurve) bleibt als
-  //  Archiv erhalten, zaehlt aber nicht in die laufende Baseline hinein.
-  const CUTOVER_DAY = '2026-08-15';   // erste Nacht ausschliesslich mit Whoop
+  //  die Apple Watch (SDNN). Beide Skalen sind NICHT vergleichbar — deshalb
+  //  werden sie nicht in einer Linie gemischt. ALLE Whoop-Tage zaehlen,
+  //  auch aus der Doppel-Trage-Woche (11.-14.08.) — Whoop hat da schon
+  //  unabhaengig und gueltig gemessen. Die Apple-Historie (u.a. die
+  //  Wacken-Kurve) bleibt separat als Archiv erhalten (CUTOVER_DAY markiert
+  //  nur, ab wann Apple keine NEUEN Daten mehr liefert — keine Gueltigkeits-
+  //  grenze fuer Whoop).
+  const CUTOVER_DAY = '2026-08-15';   // letzte Nacht OHNE Whoop-Archivgrenze
   let VITALS = [];
 
   async function fetchVitals() {
@@ -1861,8 +1864,13 @@
   // vitals bekam — so bleibt die gesamte Ampel-/Baseline-Logik unten
   // unveraendert und muss nicht doppelt gepflegt werden.
   function regenRows() {
+    // KEIN Tagesfilter mehr: Whoop hat schon waehrend der Doppel-Trage-
+    // Woche (11.-14.08., parallel zur Apple Watch) unabhaengig und
+    // korrekt gemessen. CUTOVER_DAY markiert nur, ab wann Apple KEINE
+    // neuen Daten mehr liefert (fuer das Archiv unten) — es ist keine
+    // Gueltigkeitsgrenze fuer Whoop.
     return WHOOP
-      .filter(function (r) { return r.day >= CUTOVER_DAY; })
+      .filter(function (r) { return r.hrv_rmssd !== null && r.hrv_rmssd !== undefined; })
       .map(function (r) {
         return {
           day: r.day,
