@@ -997,7 +997,7 @@
   // ============================================================
   //  KONFIGURATION
   // ============================================================
-  const BUILD = '2026-08-17 11:15';   // bei jedem Deploy hochsetzen
+  const BUILD = '2026-08-17 11:35';   // bei jedem Deploy hochsetzen
   const SUPABASE_URL = 'https://atzcaxahulifnuvwxcpa.supabase.co';
 
   // ⬇⬇⬇  HIER DEINEN PUBLISHABLE KEY EINSETZEN  ⬇⬇⬇
@@ -1661,6 +1661,18 @@
       + '</div>';
   }
 
+  // Persoenlicher Durchschnitt eines Whoop-Feldes, heutiger Tag
+  // ausgenommen (der ist ja noch unvollstaendig und wuerde den Schnitt
+  // gegen sich selbst verzerren).
+  function whAvg(key) {
+    const heute = new Date().toISOString().slice(0, 10);
+    const vals = WHOOP.filter(function (r) { return r.day !== heute; })
+      .map(function (r) { return Number(r[key]); })
+      .filter(function (v) { return isFinite(v) && v > 0; });
+    if (!vals.length) return null;
+    return vals.reduce(function (s, v) { return s + v; }, 0) / vals.length;
+  }
+
   function drawWhoop() {
     const wrap = document.getElementById('whoopWrap');
     const body = document.getElementById('whoopBody');
@@ -1687,17 +1699,32 @@
       + '<span class="wh-hero-unit">%</span></div>'
       + '<div class="wh-hero-lbl">Erholung</div>';
 
+    // Untere Zeile: persoenlicher Durchschnitt statt blosser Einheit — die
+    // Einheit steht jetzt im Label. Ausnahme SpO2: dort ist nicht der
+    // eigene Schnitt die hilfreiche Referenz, sondern die medizinische
+    // Normgrenze (≥95 %) — genau die Frage "ist das gut oder schlecht"
+    // beantwortet ein persoenlicher Durchschnitt nicht, ein fixer Normwert
+    // schon.
+    const avgHrv = whAvg('hrv_rmssd'), avgHr = whAvg('resting_hr'), avgResp = whAvg('respiratory_rate');
     html += '<div class="wh-grid wh-4">'
-      + whCell('HRV', whNum(last.hrv_rmssd, 0), 'rmssd', '#a78bfa')
-      + whCell('Ruhepuls', whNum(last.resting_hr, 0), 'bpm', '#f0a060')
-      + whCell('Atmung', whNum(last.respiratory_rate, 1), 'br/min', '#5bc8f5')
-      + whCell('SpO₂', whNum(last.spo2_pct, 1, '%'), '', '#5bc8f5')
+      + whCell('HRV (rmssd)', whNum(last.hrv_rmssd, 0),
+               avgHrv !== null ? 'Ø ' + whNum(avgHrv, 0) : '–', '#a78bfa')
+      + whCell('Ruhepuls (bpm)', whNum(last.resting_hr, 0),
+               avgHr !== null ? 'Ø ' + whNum(avgHr, 0) : '–', '#f0a060')
+      + whCell('Atmung (br/min)', whNum(last.respiratory_rate, 1),
+               avgResp !== null ? 'Ø ' + whNum(avgResp, 1) : '–', '#5bc8f5')
+      + whCell('SpO₂ (%)', whNum(last.spo2_pct, 1),
+               '≥95 normal', last.spo2_pct !== null && Number(last.spo2_pct) < 95 ? '#d4880a' : '#5bc8f5')
       + '</div>';
 
+    const avgSleep = whAvg('sleep_total_h'), avgDeep = whAvg('sleep_deep_h'), avgPerf = whAvg('sleep_performance_pct');
     html += '<div class="wh-grid wh-3">'
-      + whCell('Schlaf', whNum(last.sleep_total_h, 1, ' h'), 'gesamt', '#5bc8f5')
-      + whCell('Tief', whNum(last.sleep_deep_h, 1, ' h'), 'sws', '#5bc8f5')
-      + whCell('Leistung', whNum(last.sleep_performance_pct, 0, '%'), '', '#5bc8f5')
+      + whCell('Schlaf (h)', whNum(last.sleep_total_h, 1),
+               avgSleep !== null ? 'Ø ' + whNum(avgSleep, 1) + ' h' : '–', '#5bc8f5')
+      + whCell('Tief (h)', whNum(last.sleep_deep_h, 1),
+               avgDeep !== null ? 'Ø ' + whNum(avgDeep, 1) + ' h' : '–', '#5bc8f5')
+      + whCell('Leistung (%)', whNum(last.sleep_performance_pct, 0),
+               avgPerf !== null ? 'Ø ' + whNum(avgPerf, 0) + '%' : '–', '#5bc8f5')
       + '</div>';
 
     // Ehrlichkeit vor Optik: der laufende Tag ist unvollstaendig, und
