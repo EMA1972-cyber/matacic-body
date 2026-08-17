@@ -1002,7 +1002,7 @@
   // ============================================================
   //  KONFIGURATION
   // ============================================================
-  const BUILD = '2026-08-17 09:15';   // bei jedem Deploy hochsetzen
+  const BUILD = '2026-08-17 09:45';   // bei jedem Deploy hochsetzen
   const SUPABASE_URL = 'https://atzcaxahulifnuvwxcpa.supabase.co';
 
   // ⬇⬇⬇  HIER DEINEN PUBLISHABLE KEY EINSETZEN  ⬇⬇⬇
@@ -1966,18 +1966,14 @@
     const hrvNow = Number(last.hrv_ms);
     const sleepNow = Number(last.sleep_total_h);
 
-    // Ruhepuls: den LAUFENDEN Tag ueberspringen. Apple berechnet ihn aus
-    // dem Tagesverlauf und korrigiert ihn nachts nach unten — am 05.08.
-    // stand abends 67, endgueltig waren es 59. Ein halber Tag mit Training
-    // liefert also systematisch zu hohe Werte und wuerde falschen Alarm
-    // ausloesen. Wir nehmen den letzten abgeschlossenen Tag mit Wert.
-    const todayIso = (function () {
-      const d = new Date();
-      return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0')
-             + '-' + String(d.getDate()).padStart(2, '0');
-    })();
+    // Ruhepuls: Whoop liefert den Wert final beim Aufwachen und korrigiert
+    // ihn NICHT mehr im Tagesverlauf — anders als Apple, wo abends noch ein
+    // vorlaeufiger Wert stand, der nachts nach unten wanderte (05.08.: 67
+    // abends, 59 final). Diese Sonderregel galt nur fuer dieses Apple-
+    // Verhalten. Seit die Quelle Whoop ist, zaehlt der heutige Wert wie
+    // jeder andere — sonst zeigt der Block gestern statt heute an.
     const hrRow = rows.slice().reverse()
-      .find(r => r.day !== todayIso && isFinite(Number(r.resting_hr)) && Number(r.resting_hr) > 0);
+      .find(r => isFinite(Number(r.resting_hr)) && Number(r.resting_hr) > 0);
     const hrNow = hrRow ? Number(hrRow.resting_hr) : NaN;
 
     const cHrv   = ampelHrv(hrvNow, hrvBase);
@@ -2038,7 +2034,7 @@
       const slot = (W - padX * 2) / Math.max(rows.length - 1, 1);
       const yFor = v => yBot - (v - lo) / (hi - lo) * (yBot - yTop);
 
-      if (hrvBase) {
+      if (hrvBase && base.length >= 5) {
         const yb = yFor(hrvBase);
         if (yb > yTop && yb < yBot) {
           ctx.strokeStyle = 'rgba(167,139,250,0.35)';
