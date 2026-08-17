@@ -930,17 +930,26 @@
 <div class="chart-wrap">
   <div class="chart-title">Bilanz</div>
   <canvas id="bilanzChart"></canvas>
+  <div style="text-align:center; font-size:0.48rem; letter-spacing:0.08em; color:var(--muted); margin-top:6px; line-height:1.6;">
+    Umsatz hier aus Google/Apple — beide Quellen seit 17.08. inaktiv,<br>
+    ab jetzt wachsen nur noch Kalorien-Aufnahme &amp; Getraenke nach.<br>
+    Aktueller Umsatz &amp; Bilanz: Whoop-Block unten.
+  </div>
 </div>
 
 <!-- REGENERATION -->
 <div class="chart-wrap">
   <div class="chart-title">Regeneration</div>
   <canvas id="regenChart"></canvas>
+  <div id="regenArchiveToggle" style="text-align:center; margin-top:6px;">
+    <span onclick="toggleRegenArchiv()" style="font-size:0.5rem; letter-spacing:0.1em; text-transform:uppercase; color:var(--muted); cursor:pointer; text-decoration:underline dotted;">▼ Archiv vor Whoop (Apple, bis 14.08.)</span>
+  </div>
+  <div id="regenArchiveBody" style="display:none; margin-top:8px; font-size:0.6rem; line-height:1.7; color:var(--muted); text-align:center;"></div>
 </div>
 
-<!-- WHOOP — vorlaeufig, waehrend der Testphase -->
+<!-- WHOOP -->
 <div class="chart-wrap" id="whoopWrap" style="display:none;">
-  <div class="chart-title">Whoop <span style="color:var(--muted); letter-spacing:0.1em;">· Test</span><span id="whoopDay" style="color:var(--muted); letter-spacing:0.1em;"></span></div>
+  <div class="chart-title">Whoop<span id="whoopDay" style="color:var(--muted); letter-spacing:0.1em;"></span></div>
   <div id="whoopBody"></div>
 </div>
 
@@ -993,7 +1002,7 @@
   // ============================================================
   //  KONFIGURATION
   // ============================================================
-  const BUILD = '2026-08-12 14:50';   // bei jedem Deploy hochsetzen
+  const BUILD = '2026-08-17 09:15';   // bei jedem Deploy hochsetzen
   const SUPABASE_URL = 'https://atzcaxahulifnuvwxcpa.supabase.co';
 
   // ⬇⬇⬇  HIER DEINEN PUBLISHABLE KEY EINSETZEN  ⬇⬇⬇
@@ -1582,6 +1591,7 @@
   const SYNC_URL = 'https://atzcaxahulifnuvwxcpa.supabase.co/functions/v1/withings-sync?key=sync-4b91d7e6-matacic';
 
   const GOOGLE_SYNC_URL = SYNC_URL.replace('withings-sync', 'google-health-sync');
+  const WHOOP_SYNC_URL  = SYNC_URL.replace('withings-sync', 'whoop-sync').replace('?key=', '?days=2&key=');
   async function manualSync() {
     const btn = document.querySelector('.refresh-btn');
     btn.classList.add('spinning');
@@ -1590,8 +1600,9 @@
     // Öffne Sync in neuem Tab — umgeht iOS CORS-Einschränkungen
     const syncWindow = window.open(SYNC_URL, '_blank');
 
-    // Google Health parallel anstossen (Antwort egal, Aufruf genuegt)
+    // Google Health und Whoop parallel anstossen (Antwort egal, Aufruf genuegt)
     fetch(GOOGLE_SYNC_URL, { mode: 'no-cors' }).catch(function () {});
+    fetch(WHOOP_SYNC_URL, { mode: 'no-cors' }).catch(function () {});
 
     // Nach 4 Sekunden Dashboard neu laden
     setTimeout(async () => {
@@ -1605,7 +1616,11 @@
         try {
           NUTRITION = await fetchNutrition();
           setTimeout(drawBilanz, 60);
-        } catch (e) { console.error('Bilanz:', e); }
+          WHOOP = await fetchWhoop();
+          drawWhoop();
+          VITALS = await fetchVitals();
+          setTimeout(drawRegen, 60);
+        } catch (e) { console.error('Bilanz/Whoop/Regen:', e); }
         status(DATA.length + ' Messungen · Start ' + fmtDate(START.date) + ' · Stand ' + fmtDate(DATA[0].date));
       } catch(e) {
         status('Fehler beim Laden: ' + e.message, true);
@@ -1619,12 +1634,9 @@
   //  START
   // ============================================================
   // ============================================================
-  //  WHOOP — VORLAEUFIG (Testphase seit 10.08.2026)
+  //  WHOOP — primaere Quelle fuer Erholung, Belastung und Bilanz
+  //  (seit 17.08.2026, nach einwoechiger Testphase)
   // ============================================================
-  //  Bewusst ein eigener Block und eine eigene Tabelle (whoop_daily).
-  //  Die HRV kommt hier als RMSSD, im Regenerationsblock als SDNN von
-  //  Apple — die beiden Skalen duerfen NICHT in einen Topf. Deshalb
-  //  keine gemeinsame Kurve, keine gemeinsame Baseline.
   //
   //  Faellt die Entscheidung gegen Whoop, wird dieser Block ersatzlos
   //  geloescht. Faellt sie dafuer, ersetzt er den Regenerationsblock.
@@ -1765,7 +1777,7 @@
     }
 
     if (istHeute) note += 'Erholung und Schlaf von heute Nacht<br>';
-    note += 'HRV als RMSSD — nicht mit dem Regenerationsblock (SDNN) vergleichbar';
+    note += 'Detaillierter Verlauf mit Baseline-Ampel im Regenerationsblock oben';
     html += '<div class="wh-note">' + note + '</div>';
 
     body.innerHTML = html;
@@ -1796,8 +1808,16 @@
           setTimeout(drawBilanz, 60);
           return fetchWhoop();
         })
-        .then(function (w) { WHOOP = w || []; drawWhoop(); })
-        .catch(function (e) { console.error('Bilanz/Whoop:', e); });
+        .then(function (w) {
+          WHOOP = w || [];
+          drawWhoop();
+          return fetchVitals();          // erst NACH Whoop, regenRows() braucht WHOOP
+        })
+        .then(function (v) {
+          VITALS = v || [];
+          setTimeout(drawRegen, 60);
+        })
+        .catch(function (e) { console.error('Bilanz/Whoop/Regen:', e); });
       status(DATA.length + ' Messungen · Start ' + fmtDate(START.date)
              + ' · Stand ' + fmtDate(DATA[0].date));
     } catch (e) {
@@ -1819,6 +1839,13 @@
   //  faellt oder der Ruhepuls darueber steigt — also genau dann, wenn
   //  man sich subjektiv noch gut fuehlt, der Koerper aber schon
   //  hinterherhinkt. Es gibt keine "je hoeher desto besser"-Wertung.
+  //
+  //  UMSTELLUNG 17.08.2026: Quelle ist ab sofort Whoop (RMSSD), nicht mehr
+  //  die Apple Watch (SDNN). Letzte Apple-Nacht war 14.08. Beide Skalen
+  //  sind NICHT vergleichbar — deshalb werden sie nicht in einer Linie
+  //  gemischt. Die Apple-Historie (u.a. die Wacken-Kurve) bleibt als
+  //  Archiv erhalten, zaehlt aber nicht in die laufende Baseline hinein.
+  const CUTOVER_DAY = '2026-08-15';   // erste Nacht ausschliesslich mit Whoop
   let VITALS = [];
 
   async function fetchVitals() {
@@ -1828,6 +1855,46 @@
     });
     if (!res.ok) return [];
     return await res.json();
+  }
+
+  // Baut aus whoop_daily dieselbe Form, die drawRegen() bisher von
+  // vitals bekam — so bleibt die gesamte Ampel-/Baseline-Logik unten
+  // unveraendert und muss nicht doppelt gepflegt werden.
+  function regenRows() {
+    return WHOOP
+      .filter(function (r) { return r.day >= CUTOVER_DAY; })
+      .map(function (r) {
+        return {
+          day: r.day,
+          hrv_ms: r.hrv_rmssd,
+          resting_hr: r.resting_hr,
+          sleep_total_h: r.sleep_total_h,
+          sleep_deep_h: r.sleep_deep_h,
+        };
+      });
+  }
+
+  function toggleRegenArchiv() {
+    const body = document.getElementById('regenArchiveBody');
+    const link = document.querySelector('#regenArchiveToggle span');
+    if (!body) return;
+    const show = body.style.display === 'none';
+    body.style.display = show ? 'block' : 'none';
+    if (link) link.textContent = (show ? '▲' : '▼') + ' Archiv vor Whoop (Apple, bis 14.08.)';
+    if (show && !body.dataset.filled) {
+      const arch = VITALS.filter(function (r) { return r.day < CUTOVER_DAY; });
+      if (!arch.length) {
+        body.innerHTML = 'Keine Apple-Daten vorhanden.';
+      } else {
+        const hrvVals = arch.map(function (r) { return Number(r.hrv_ms); }).filter(isFinite);
+        const max = Math.max.apply(null, hrvVals);
+        const maxRow = arch.find(function (r) { return Number(r.hrv_ms) === max; });
+        body.innerHTML = arch.length + ' Naechte aufgezeichnet (Apple, SDNN)'
+          + '<br>Hoechster Wert: ' + Math.round(max) + ' ms am ' + fmtDate(maxRow.day)
+          + '<br><span style="font-size:0.9em;">Nicht mit den Whoop-Werten oben vergleichbar — andere Messmethode (SDNN vs. RMSSD).</span>';
+      }
+      body.dataset.filled = '1';
+    }
   }
 
   function drawRegen() {
@@ -1845,7 +1912,7 @@
     const COL_HRV = '#a78bfa', COL_HR = '#f0a060', COL_SLEEP = '#5bc8f5';
     const COL_GOOD = '#3dd68c', COL_BAD = '#d63b3b', COL_MUTED = '#7a7a85';
 
-    const rows = VITALS.slice(-14);
+    const rows = regenRows().slice(-14);
     ctx.textAlign = 'center';
 
     if (rows.length < 2) {
@@ -1859,14 +1926,15 @@
 
     // Baseline aus allen Tagen ausser den letzten drei — der aktuelle
     // Zustand soll sich am eigenen Normalzustand messen, nicht an sich selbst
-    const base = VITALS.slice(0, -3);
+    const allRows = regenRows();
+    const base = allRows.slice(0, -3);
     const avgOf = (arr, key) => {
       const v = arr.map(r => Number(r[key])).filter(x => isFinite(x) && x > 0);
       return v.length ? v.reduce((s, x) => s + x, 0) / v.length : null;
     };
-    const hrvBase   = avgOf(base.length >= 5 ? base : VITALS, 'hrv_ms');
-    const hrBase    = avgOf(base.length >= 5 ? base : VITALS, 'resting_hr');
-    const sleepBase = avgOf(base.length >= 5 ? base : VITALS, 'sleep_total_h');
+    const hrvBase   = avgOf(base.length >= 5 ? base : allRows, 'hrv_ms');
+    const hrBase    = avgOf(base.length >= 5 ? base : allRows, 'resting_hr');
+    const sleepBase = avgOf(base.length >= 5 ? base : allRows, 'sleep_total_h');
     const COL_WARN  = '#e8a020';
 
     // --- Ampel-Schwellen, relativ zur eigenen Baseline ---
@@ -2372,10 +2440,10 @@
     setTimeout(drawChart, 60);
     NUTRITION = await fetchNutrition();
     setTimeout(drawBilanz, 60);
-    VITALS = await fetchVitals();
-    setTimeout(drawRegen, 60);
     WHOOP = await fetchWhoop();
     drawWhoop();
+    VITALS = await fetchVitals();
+    setTimeout(drawRegen, 60);
     if (START && DATA.length) {
       status(DATA.length + ' Messungen · Start ' + fmtDate(START.date)
              + ' · Stand ' + fmtDate(DATA[0].date));
@@ -2440,11 +2508,13 @@
     fetchNutrition()
       .then(function (n) { NUTRITION = n; drawBilanz(); })
       .catch(function () {});
-    fetchVitals()
-      .then(function (v) { VITALS = v; drawRegen(); })
-      .catch(function () {});
     fetchWhoop()
-      .then(function (w) { WHOOP = w || []; drawWhoop(); })
+      .then(function (w) {
+        WHOOP = w || [];
+        drawWhoop();
+        return fetchVitals();
+      })
+      .then(function (v) { VITALS = v || []; drawRegen(); })
       .catch(function () {});
   });
 
