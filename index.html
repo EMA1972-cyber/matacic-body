@@ -942,12 +942,7 @@
     <span onclick="toggleRegenArchiv()" style="font-size:0.5rem; letter-spacing:0.1em; text-transform:uppercase; color:var(--muted); cursor:pointer; text-decoration:underline dotted;">▼ Archiv vor Whoop (Apple, bis 14.08.)</span>
   </div>
   <div id="regenArchiveBody" style="display:none; margin-top:8px; font-size:0.6rem; line-height:1.7; color:var(--muted); text-align:center;"></div>
-</div>
-
-<!-- WHOOP -->
-<div class="chart-wrap" id="whoopWrap" style="display:none;">
-  <div class="chart-title">Whoop<span id="whoopDay" style="color:var(--muted); letter-spacing:0.1em;"></span></div>
-  <div id="whoopBody"></div>
+  <div id="regenToday" style="margin-top:16px; padding-top:14px; border-top:1px solid var(--border);"></div>
 </div>
 
 <!-- TABLE -->
@@ -999,7 +994,7 @@
   // ============================================================
   //  KONFIGURATION
   // ============================================================
-  const BUILD = '2026-08-17 12:10';   // bei jedem Deploy hochsetzen
+  const BUILD = '2026-08-18 13:00';   // bei jedem Deploy hochsetzen
   const SUPABASE_URL = 'https://atzcaxahulifnuvwxcpa.supabase.co';
 
   // ⬇⬇⬇  HIER DEINEN PUBLISHABLE KEY EINSETZEN  ⬇⬇⬇
@@ -1578,7 +1573,7 @@
   // wie viele Zeilen dahinter stecken
   function updateTableToggle() {
     const n = START ? DATA.filter(r => r.date >= START.date).length : 0;
-    const label = tableExpanded ? '▲ Weniger anzeigen' : '▼ Alle ' + n + ' anzeigen';
+    const label = tableExpanded ? '▲ Weniger anzeigen' : '▼ Alle ' + n + ' seit Start anzeigen';
     const hint = document.getElementById('toggle-hint');
     const more = document.getElementById('tableMore');
     if (hint) hint.textContent = label;
@@ -1614,11 +1609,11 @@
           NUTRITION = await fetchNutrition();
           setTimeout(drawBilanz, 60);
           WHOOP = await fetchWhoop();
-          drawWhoop();
+          drawRegenToday();
           VITALS = await fetchVitals();
           setTimeout(drawRegen, 60);
         } catch (e) { console.error('Bilanz/Whoop/Regen:', e); }
-        status(DATA.length + ' Messungen · Start ' + fmtDate(START.date) + ' · Stand ' + fmtDate(DATA[0].date));
+        status(DATA.length + ' Messungen gesamt · Start ' + fmtDate(START.date) + ' · Stand ' + fmtDate(DATA[0].date));
       } catch(e) {
         status('Fehler beim Laden: ' + e.message, true);
       } finally {
@@ -1695,12 +1690,22 @@
     return vals.reduce(function (s, v) { return s + v; }, 0) / vals.length;
   }
 
-  function drawWhoop() {
-    const wrap = document.getElementById('whoopWrap');
-    const body = document.getElementById('whoopBody');
-    if (!wrap || !body) return;
-    if (!WHOOP.length) { wrap.style.display = 'none'; return; }
-    wrap.style.display = '';
+  // Kompakte "Heute"-Zeile unterhalb des Regenerations-Trendcharts.
+  // Zeigt nur, was der Chart darueber NICHT zeigt: Whoops eigenen
+  // Erholungs-Score (%), Belastung, Atmung, SpO2 und Schlaf-Leistung.
+  // HRV/Ruhepuls/Schlafstunden/Tiefschlaf stehen bereits im Chart darueber
+  // — hier nicht nochmal, um Dopplung zu vermeiden.
+  //
+  // Belastung ist bewusst eine reine Zahl ohne Fuellbalken: ein Balken,
+  // der sich Richtung Maximum fuellt, legt "mehr ist besser" nahe — genau
+  // die Gamification-Falle, vor der die App selbst am 12.08. gewarnt hat
+  // ("Arbeite weiter auf dein Ziel von 11,0 hin"). Belastung beschreibt,
+  // sie bewertet nicht — deshalb steht sie hier als Zahl neben Atmung und
+  // Leistung, nicht als Balken in der Bilanz.
+  function drawRegenToday() {
+    const el = document.getElementById('regenToday');
+    if (!el) return;
+    if (!WHOOP.length) { el.innerHTML = ''; return; }
 
     const last = WHOOP[WHOOP.length - 1];
     const heute = new Date().toISOString().slice(0, 10);
@@ -1719,45 +1724,21 @@
       + '<span class="wh-hero-val" style="color:' + recCol + ';">'
       + (rec === null ? '–' : whNum(rec, 0)) + '</span>'
       + '<span class="wh-hero-unit">%</span></div>'
-      + '<div class="wh-hero-lbl">Erholung</div>';
+      + '<div class="wh-hero-lbl">Erholung · ' + fmtDate(last.day)
+      + (istHeute ? ' (heute)' : '') + '</div>';
 
-    // Untere Zeile: persoenlicher Durchschnitt statt blosser Einheit — die
-    // Einheit steht jetzt im Label. Ausnahme SpO2: dort ist nicht der
-    // eigene Schnitt die hilfreiche Referenz, sondern die medizinische
-    // Normgrenze (≥95 %) — genau die Frage "ist das gut oder schlecht"
-    // beantwortet ein persoenlicher Durchschnitt nicht, ein fixer Normwert
-    // schon.
-    const avgHrv = whAvg('hrv_rmssd'), avgHr = whAvg('resting_hr'), avgResp = whAvg('respiratory_rate');
+    const avgStrain = whAvg('day_strain'), avgResp = whAvg('respiratory_rate'),
+          avgPerf = whAvg('sleep_performance_pct');
     html += '<div class="wh-grid wh-4">'
-      + whCell('HRV (rmssd)', whNum(last.hrv_rmssd, 0),
-               avgHrv !== null ? 'Ø ' + whNum(avgHrv, 0) : '–',
-               ampelHrvG(Number(last.hrv_rmssd), avgHrv))
-      + whCell('Ruhepuls (bpm)', whNum(last.resting_hr, 0),
-               avgHr !== null ? 'Ø ' + whNum(avgHr, 0) : '–',
-               ampelHrG(Number(last.resting_hr), avgHr))
+      + whCell('Belastung', last.day_strain !== null ? whNum(last.day_strain, 1) : '–',
+               avgStrain !== null ? 'Ø ' + whNum(avgStrain, 1) : '–', '#5bc8f5')
       + whCell('Atmung (br/min)', whNum(last.respiratory_rate, 1),
                avgResp !== null ? 'Ø ' + whNum(avgResp, 1) : '–', '#5bc8f5')
       + whCell('SpO₂ (%)', whNum(last.spo2_pct, 1),
                '≥95 normal', last.spo2_pct !== null && Number(last.spo2_pct) < 95 ? '#d4880a' : '#5bc8f5')
-      + '</div>';
-
-    const avgSleep = whAvg('sleep_total_h'), avgDeep = whAvg('sleep_deep_h'), avgPerf = whAvg('sleep_performance_pct');
-    html += '<div class="wh-grid wh-3">'
-      + whCell('Schlaf (h)', whNum(last.sleep_total_h, 1),
-               avgSleep !== null ? 'Ø ' + whNum(avgSleep, 1) + ' h' : '–', '#5bc8f5')
-      + whCell('Tief (h)', whNum(last.sleep_deep_h, 1),
-               avgDeep !== null ? 'Ø ' + whNum(avgDeep, 1) + ' h' : '–', '#5bc8f5')
       + whCell('Leistung (%)', whNum(last.sleep_performance_pct, 0),
                avgPerf !== null ? 'Ø ' + whNum(avgPerf, 0) + '%' : '–', '#5bc8f5')
       + '</div>';
-
-    // Ehrlichkeit vor Optik: der laufende Tag ist unvollstaendig, und
-    // solange Whoop kalibriert, sind die Werte gegen Bevoelkerungsdaten
-    // gerechnet — nicht gegen die eigene Baseline.
-    const dayEl = document.getElementById('whoopDay');
-    if (dayEl) {
-      dayEl.textContent = ' · ' + fmtDate(last.day) + (istHeute ? ' (heute)' : '');
-    }
 
     let note = '';
 
@@ -1777,10 +1758,10 @@
     }
 
     if (istHeute) note += 'Erholung und Schlaf von heute Nacht<br>';
-    note += 'Belastung, Umsatz &amp; Bilanz: Bilanz-Chart oben · Verlauf mit Baseline-Ampel: Regeneration oben';
+    note += 'Umsatz &amp; Bilanz: Bilanz-Chart oben';
     html += '<div class="wh-note">' + note + '</div>';
 
-    body.innerHTML = html;
+    el.innerHTML = html;
   }
 
   async function init() {
@@ -1810,7 +1791,7 @@
         })
         .then(function (w) {
           WHOOP = w || [];
-          drawWhoop();
+          drawRegenToday();
           return fetchVitals();          // erst NACH Whoop, regenRows() braucht WHOOP
         })
         .then(function (v) {
@@ -1818,7 +1799,7 @@
           setTimeout(drawRegen, 60);
         })
         .catch(function (e) { console.error('Bilanz/Whoop/Regen:', e); });
-      status(DATA.length + ' Messungen · Start ' + fmtDate(START.date)
+      status(DATA.length + ' Messungen gesamt · Start ' + fmtDate(START.date)
              + ' · Stand ' + fmtDate(DATA[0].date));
     } catch (e) {
       console.error(e);
@@ -2231,7 +2212,7 @@
     if (!rows.length) return;
 
     const dpr = window.devicePixelRatio || 1;
-    const H = 238;
+    const H = 215;                    // war 238, Belastungs-Streifen entfaellt
     canvas.width = canvas.offsetWidth * dpr;
     canvas.height = H * dpr;
     ctx.scale(dpr, dpr);
@@ -2241,7 +2222,6 @@
     const COL_DRINK = '#5bc8f5', COL_MUTED = '#7a7a85';
     const COL_GOOD = '#3dd68c', COL_BAD = '#d63b3b';
     const COL_TODAY = '#e8a020';
-    const STRAIN_MAX = 21;           // Whoops feste Skala, 0-21
     const padX = 8;
     const slot = (W - padX * 2) / rows.length;
     const barW = Math.min(slot * 0.52, 32);
@@ -2332,15 +2312,9 @@
       ctx.fillText('Ø ' + (avgMl / 1000).toFixed(2).replace('.', ',') + ' L Getränke', W / 2, 26);
     }
     // Schritte entfallen: Whoop erfasst sie nicht zuverlaessig (Pad-Test
-    // 15.08.: 132 Schritte in 99 Minuten). Belastung (Strain) ist neutral,
-    // keine Ampel — sie beschreibt, sie bewertet nicht.
-    const strainRows = past.map(r => whoopReliable(r.day)).filter(w => w && w.day_strain !== null);
-    if (strainRows.length) {
-      const avgSr = strainRows.reduce((s, w) => s + Number(w.day_strain), 0) / strainRows.length;
-      ctx.fillStyle = COL_DRINK;
-      ctx.font = 'bold 10px DM Mono, monospace';
-      ctx.fillText('Ø ' + avgSr.toFixed(1).replace('.', ',') + ' Belastung', W / 2, 40);
-    }
+    // 15.08.: 132 Schritte in 99 Minuten). Belastung steht jetzt im
+    // Regenerationsblock (Zahl statt Balken — ein Fuellbalken legt "mehr
+    // ist besser" nahe, Belastung soll aber beschreiben, nicht bewerten).
 
     // --- Nulllinie ---
     ctx.strokeStyle = 'rgba(255,255,255,0.18)';
@@ -2429,8 +2403,7 @@
       ctx.fillText((p.ml / 1000).toFixed(1).replace('.', ',') + ' L', p.x, p.y - 7);
     });
 
-    // --- Tages-Labels + Belastungs-Streifen (statt Schritte) ---
-    const stripW = Math.min(slot * 0.72, 42), stripH = 6, stripY = 214;
+    // --- Tages-Labels ---
     rows.forEach((r, i) => {
       const cx = padX + slot * i + slot / 2;
       const isT = i === tIdx;
@@ -2442,24 +2415,6 @@
       ctx.font = '8px DM Mono, monospace';
       ctx.fillText(String(d.getDate()).padStart(2, '0') + '.'
                  + String(d.getMonth() + 1).padStart(2, '0'), cx, 204);
-
-      const w = whoopReliable(r.day);
-      const sr = w && w.day_strain !== null ? Number(w.day_strain) : 0;
-      ctx.fillStyle = 'rgba(255,255,255,0.07)';
-      ctx.beginPath();
-      ctx.roundRect(cx - stripW / 2, stripY, stripW, stripH, 3);
-      ctx.fill();
-      if (sr > 0) {
-        const frac = Math.min(sr / STRAIN_MAX, 1);
-        // Immer neutralblau: Belastung beschreibt, sie bewertet nicht —
-        // 18 ist an einem gruenen Tag angemessen und an einem roten zu viel
-        ctx.fillStyle = COL_DRINK;
-        ctx.beginPath();
-        ctx.roundRect(cx - stripW / 2, stripY, Math.max(3, stripW * frac), stripH, 3);
-        ctx.fill();
-        ctx.font = 'bold 8px DM Mono, monospace';
-        ctx.fillText(sr.toFixed(1).replace('.', ','), cx, stripY + 17);
-      }
     });
   }
 
@@ -2474,11 +2429,11 @@
     NUTRITION = await fetchNutrition();
     setTimeout(drawBilanz, 60);
     WHOOP = await fetchWhoop();
-    drawWhoop();
+    drawRegenToday();
     VITALS = await fetchVitals();
     setTimeout(drawRegen, 60);
     if (START && DATA.length) {
-      status(DATA.length + ' Messungen · Start ' + fmtDate(START.date)
+      status(DATA.length + ' Messungen gesamt · Start ' + fmtDate(START.date)
              + ' · Stand ' + fmtDate(DATA[0].date));
     }
   }
@@ -2544,7 +2499,7 @@
     fetchWhoop()
       .then(function (w) {
         WHOOP = w || [];
-        drawWhoop();
+        drawRegenToday();
         return fetchVitals();
       })
       .then(function (v) { VITALS = v || []; drawRegen(); })
