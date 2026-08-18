@@ -697,6 +697,7 @@
   }
   .wh-grid { display: grid; gap: 8px; margin-bottom: 8px; }
   .wh-4 { grid-template-columns: repeat(4, 1fr); }
+  .wh-2 { grid-template-columns: repeat(2, 1fr); }
   .wh-3 { grid-template-columns: repeat(3, 1fr); }
   .wh-cell {
     background: var(--surface2); border: 1px solid var(--border);
@@ -937,12 +938,9 @@
 <!-- REGENERATION -->
 <div class="chart-wrap">
   <div class="chart-title">Regeneration</div>
+  <div id="regenHero" style="text-align:center; margin-bottom:8px;"></div>
+  <div id="regenToday" style="margin-bottom:12px;"></div>
   <canvas id="regenChart"></canvas>
-  <div id="regenArchiveToggle" style="text-align:center; margin-top:6px;">
-    <span onclick="toggleRegenArchiv()" style="font-size:0.5rem; letter-spacing:0.1em; text-transform:uppercase; color:var(--muted); cursor:pointer; text-decoration:underline dotted;">▼ Archiv vor Whoop (Apple, bis 14.08.)</span>
-  </div>
-  <div id="regenArchiveBody" style="display:none; margin-top:8px; font-size:0.6rem; line-height:1.7; color:var(--muted); text-align:center;"></div>
-  <div id="regenToday" style="margin-top:16px; padding-top:14px; border-top:1px solid var(--border);"></div>
 </div>
 
 <!-- TABLE -->
@@ -994,7 +992,7 @@
   // ============================================================
   //  KONFIGURATION
   // ============================================================
-  const BUILD = '2026-08-18 13:00';   // bei jedem Deploy hochsetzen
+  const BUILD = '2026-08-18 13:45';   // bei jedem Deploy hochsetzen
   const SUPABASE_URL = 'https://atzcaxahulifnuvwxcpa.supabase.co';
 
   // ⬇⬇⬇  HIER DEINEN PUBLISHABLE KEY EINSETZEN  ⬇⬇⬇
@@ -1571,9 +1569,16 @@
 
   // Beschriftung beider Schalter -- mit Anzahl, damit klar ist,
   // wie viele Zeilen dahinter stecken
+  // Einheitlicher Zaehler: alles ab dem offiziellen Startdatum (29.12.),
+  // ueberall im Dashboard dieselbe Zahl — Withings hat vereinzelt aeltere
+  // Messungen (ab 06.12.), die zaehlen bewusst nirgends mit.
+  function countSinceStart() {
+    return START ? DATA.filter(r => r.date >= START.date).length : DATA.length;
+  }
+
   function updateTableToggle() {
-    const n = START ? DATA.filter(r => r.date >= START.date).length : 0;
-    const label = tableExpanded ? '▲ Weniger anzeigen' : '▼ Alle ' + n + ' seit Start anzeigen';
+    const n = countSinceStart();
+    const label = tableExpanded ? '▲ Weniger anzeigen' : '▼ Alle ' + n + ' anzeigen';
     const hint = document.getElementById('toggle-hint');
     const more = document.getElementById('tableMore');
     if (hint) hint.textContent = label;
@@ -1613,7 +1618,7 @@
           VITALS = await fetchVitals();
           setTimeout(drawRegen, 60);
         } catch (e) { console.error('Bilanz/Whoop/Regen:', e); }
-        status(DATA.length + ' Messungen gesamt · Start ' + fmtDate(START.date) + ' · Stand ' + fmtDate(DATA[0].date));
+        status(countSinceStart() + ' Messungen · Start ' + fmtDate(START.date) + ' · Stand ' + fmtDate(DATA[0].date));
       } catch(e) {
         status('Fehler beim Laden: ' + e.message, true);
       } finally {
@@ -1711,33 +1716,12 @@
     const heute = new Date().toISOString().slice(0, 10);
     const istHeute = last.day === heute;
 
-    // Whoops eigene Erholungs-Baender. Bewusst NICHT umgedeutet.
-    const rec = last.recovery_score === null ? null : Number(last.recovery_score);
-    let recCol = 'var(--muted)';
-    if (rec !== null) {
-      recCol = rec >= 67 ? '#3dd68c' : (rec >= 34 ? '#d4880a' : '#d63b3b');
-    }
-
-    let html = '';
-
-    html += '<div class="wh-hero">'
-      + '<span class="wh-hero-val" style="color:' + recCol + ';">'
-      + (rec === null ? '–' : whNum(rec, 0)) + '</span>'
-      + '<span class="wh-hero-unit">%</span></div>'
-      + '<div class="wh-hero-lbl">Erholung · ' + fmtDate(last.day)
-      + (istHeute ? ' (heute)' : '') + '</div>';
-
-    const avgStrain = whAvg('day_strain'), avgResp = whAvg('respiratory_rate'),
-          avgPerf = whAvg('sleep_performance_pct');
-    html += '<div class="wh-grid wh-4">'
-      + whCell('Belastung', last.day_strain !== null ? whNum(last.day_strain, 1) : '–',
-               avgStrain !== null ? 'Ø ' + whNum(avgStrain, 1) : '–', '#5bc8f5')
+    const avgResp = whAvg('respiratory_rate');
+    let html = '<div class="wh-grid wh-2">'
       + whCell('Atmung (br/min)', whNum(last.respiratory_rate, 1),
                avgResp !== null ? 'Ø ' + whNum(avgResp, 1) : '–', '#5bc8f5')
       + whCell('SpO₂ (%)', whNum(last.spo2_pct, 1),
                '≥95 normal', last.spo2_pct !== null && Number(last.spo2_pct) < 95 ? '#d4880a' : '#5bc8f5')
-      + whCell('Leistung (%)', whNum(last.sleep_performance_pct, 0),
-               avgPerf !== null ? 'Ø ' + whNum(avgPerf, 0) + '%' : '–', '#5bc8f5')
       + '</div>';
 
     let note = '';
@@ -1757,7 +1741,6 @@
       }
     }
 
-    if (istHeute) note += 'Erholung und Schlaf von heute Nacht<br>';
     note += 'Umsatz &amp; Bilanz: Bilanz-Chart oben';
     html += '<div class="wh-note">' + note + '</div>';
 
@@ -1799,7 +1782,7 @@
           setTimeout(drawRegen, 60);
         })
         .catch(function (e) { console.error('Bilanz/Whoop/Regen:', e); });
-      status(DATA.length + ' Messungen gesamt · Start ' + fmtDate(START.date)
+      status(countSinceStart() + ' Messungen · Start ' + fmtDate(START.date)
              + ' · Stand ' + fmtDate(DATA[0].date));
     } catch (e) {
       console.error(e);
@@ -1859,31 +1842,9 @@
           resting_hr: r.resting_hr,
           sleep_total_h: r.sleep_total_h,
           sleep_deep_h: r.sleep_deep_h,
+          day_strain: r.day_strain,
         };
       });
-  }
-
-  function toggleRegenArchiv() {
-    const body = document.getElementById('regenArchiveBody');
-    const link = document.querySelector('#regenArchiveToggle span');
-    if (!body) return;
-    const show = body.style.display === 'none';
-    body.style.display = show ? 'block' : 'none';
-    if (link) link.textContent = (show ? '▲' : '▼') + ' Archiv vor Whoop (Apple, bis 14.08.)';
-    if (show && !body.dataset.filled) {
-      const arch = VITALS.filter(function (r) { return r.day < CUTOVER_DAY; });
-      if (!arch.length) {
-        body.innerHTML = 'Keine Apple-Daten vorhanden.';
-      } else {
-        const hrvVals = arch.map(function (r) { return Number(r.hrv_ms); }).filter(isFinite);
-        const max = Math.max.apply(null, hrvVals);
-        const maxRow = arch.find(function (r) { return Number(r.hrv_ms) === max; });
-        body.innerHTML = arch.length + ' Naechte aufgezeichnet (Apple, SDNN)'
-          + '<br>Hoechster Wert: ' + Math.round(max) + ' ms am ' + fmtDate(maxRow.day)
-          + '<br><span style="font-size:0.9em;">Nicht mit den Whoop-Werten oben vergleichbar — andere Messmethode (SDNN vs. RMSSD).</span>';
-      }
-      body.dataset.filled = '1';
-    }
   }
 
   function drawRegen() {
@@ -1985,9 +1946,22 @@
         statusTxt = 'gut erholt';
       }
     }
-    ctx.fillStyle = statusCol;
-    ctx.font = 'bold 11px DM Mono, monospace';
-    ctx.fillText(statusTxt, W / 2, 13);
+
+    // --- Hero: Whoops Erholung % (klein) + Status, oberhalb des Charts ---
+    const heroEl = document.getElementById('regenHero');
+    if (heroEl) {
+      const lastW = WHOOP.length ? WHOOP[WHOOP.length - 1] : null;
+      const rec = (lastW && lastW.recovery_score !== null && lastW.recovery_score !== undefined)
+                  ? Number(lastW.recovery_score) : null;
+      let recCol = COL_MUTED;
+      if (rec !== null) recCol = rec >= 67 ? COL_GOOD : (rec >= 34 ? COL_WARN : COL_BAD);
+      heroEl.innerHTML =
+          '<span style="font-size:1.2rem; font-weight:500; color:' + recCol + ';">'
+        + (rec === null ? '–' : Math.round(rec))
+        + '<span style="font-size:0.65rem; color:var(--muted);">%</span></span>'
+        + '<div style="font-size:0.7rem; font-weight:bold; color:' + statusCol + '; margin-top:1px;">'
+        + statusTxt + '</div>';
+    }
 
     // --- Detailzeile, jeder Wert in seiner eigenen Ampelfarbe ---
     const segs = [];
@@ -2004,11 +1978,11 @@
       ctx.textAlign = 'left';
       segs.forEach((sg, i) => {
         ctx.fillStyle = sg.c;
-        ctx.fillText(sg.t, x, 27);
+        ctx.fillText(sg.t, x, 15);
         x += ctx.measureText(sg.t).width;
         if (i < segs.length - 1) {
           ctx.fillStyle = COL_MUTED;
-          ctx.fillText(sep, x, 27);
+          ctx.fillText(sep, x, 15);
           x += wSep;
         }
       });
@@ -2116,6 +2090,25 @@
     ctx.fillText('SCHLAF h  ·  Tiefschlaf min', padX, bY - 6);
     ctx.textAlign = 'center';
 
+    // --- Belastung je Tag: reine Zahl, KEIN Balken ---
+    // Ein Fuellbalken Richtung Maximum legt "mehr ist besser" nahe — genau
+    // die Gamification-Falle, vor der die Whoop-App selbst am 12.08. warnte
+    // ("Arbeite weiter auf dein Ziel von 11,0 hin"). Belastung beschreibt,
+    // sie bewertet nicht, deshalb hier nur als Zahl.
+    ctx.font = '7px DM Mono, monospace';
+    rows.forEach((r, i) => {
+      const cx = padX + slotB * i + slotB / 2;
+      const sr = Number(r.day_strain);
+      if (!isFinite(sr)) return;
+      ctx.fillStyle = i === rows.length - 1 ? '#e8a020' : 'rgba(255,255,255,0.55)';
+      ctx.fillText(sr.toFixed(1).replace('.', ','), cx, bY + bH + 21);
+    });
+    ctx.fillStyle = COL_MUTED;
+    ctx.font = '8px DM Mono, monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText('Belastung', padX, bY + bH + 21 - 6);
+    ctx.textAlign = 'center';
+
     // --- Datums-Labels ---
     rows.forEach((r, i) => {
       // Vom ENDE zaehlen, nicht vom Anfang: sonst landen bei gerader
@@ -2127,7 +2120,7 @@
       ctx.fillStyle = i === rows.length - 1 ? '#e8a020' : COL_MUTED;
       ctx.font = (i === rows.length - 1 ? 'bold ' : '') + '8px DM Mono, monospace';
       ctx.fillText(String(d.getDate()).padStart(2, '0') + '.'
-                 + String(d.getMonth() + 1).padStart(2, '0'), cx, bY + bH + 20);
+                 + String(d.getMonth() + 1).padStart(2, '0'), cx, bY + bH + 33);
     });
 
     // --- Ruhepuls klein darunter, nur wenn Baseline steht ---
@@ -2433,7 +2426,7 @@
     VITALS = await fetchVitals();
     setTimeout(drawRegen, 60);
     if (START && DATA.length) {
-      status(DATA.length + ' Messungen gesamt · Start ' + fmtDate(START.date)
+      status(countSinceStart() + ' Messungen · Start ' + fmtDate(START.date)
              + ' · Stand ' + fmtDate(DATA[0].date));
     }
   }
