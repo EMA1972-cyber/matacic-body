@@ -992,7 +992,7 @@
   // ============================================================
   //  KONFIGURATION
   // ============================================================
-  const BUILD = '2026-08-18 13:45';   // bei jedem Deploy hochsetzen
+  const BUILD = '2026-08-18 14:00';   // bei jedem Deploy hochsetzen
   const SUPABASE_URL = 'https://atzcaxahulifnuvwxcpa.supabase.co';
 
   // ⬇⬇⬇  HIER DEINEN PUBLISHABLE KEY EINSETZEN  ⬇⬇⬇
@@ -1741,8 +1741,7 @@
       }
     }
 
-    note += 'Umsatz &amp; Bilanz: Bilanz-Chart oben';
-    html += '<div class="wh-note">' + note + '</div>';
+    if (note) html += '<div class="wh-note">' + note + '</div>';
 
     el.innerHTML = html;
   }
@@ -1958,7 +1957,7 @@
       heroEl.innerHTML =
           '<span style="font-size:1.2rem; font-weight:500; color:' + recCol + ';">'
         + (rec === null ? '–' : Math.round(rec))
-        + '<span style="font-size:0.65rem; color:var(--muted);">%</span></span>'
+        + '<span style="font-size:0.65rem; color:' + recCol + ';">%</span></span>'
         + '<div style="font-size:0.7rem; font-weight:bold; color:' + statusCol + '; margin-top:1px;">'
         + statusTxt + '</div>';
     }
