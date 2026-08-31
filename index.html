@@ -992,7 +992,7 @@
   // ============================================================
   //  KONFIGURATION
   // ============================================================
-  const BUILD = '2026-08-31 10:30';   // bei jedem Deploy hochsetzen
+  const BUILD = '2026-08-31 16:10';   // bei jedem Deploy hochsetzen
   const SUPABASE_URL = 'https://atzcaxahulifnuvwxcpa.supabase.co';
 
   // ⬇⬇⬇  HIER DEINEN PUBLISHABLE KEY EINSETZEN  ⬇⬇⬇
@@ -2209,14 +2209,14 @@
     if (!rows.length) return;
 
     const dpr = window.devicePixelRatio || 1;
-    const H = 238;                    // 215 + Eiweiss-Streifen unter den Datums-Labels
+    const H = 180;                    // Getraenke-Zeile entfallen, Rest zusammengeschoben
     canvas.width = canvas.offsetWidth * dpr;
     canvas.height = H * dpr;
     ctx.scale(dpr, dpr);
     const W = canvas.offsetWidth;
     ctx.clearRect(0, 0, W, H);
 
-    const COL_DRINK = '#5bc8f5', COL_MUTED = '#7a7a85';
+    const COL_MUTED = '#7a7a85';
     const COL_GOOD = '#3dd68c', COL_BAD = '#d63b3b';
     const COL_TODAY = '#e8a020';
     const padX = 8;
@@ -2257,17 +2257,14 @@
     const valid  = past.map(deltaOf).filter(v => v !== null);
     const dAbsMax = Math.max(600, ...valid.map(Math.abs));
 
-    const y0 = 146, maxBarH = 32;    // Nulllinie + max. Balkenhoehe
+    const y0 = 88, maxBarH = 32;     // Nulllinie + max. Balkenhoehe
 
-    // Getraenke: eigene Skala oberhalb — Skala nur aus abgeschlossenen Tagen
-    const mls = past.map(r => Number(r.drinks_ml)).filter(v => v > 0);
-    const dMin = mls.length ? Math.min(...mls) : 0;
-    const dMax = mls.length ? Math.max(...mls) : 4000;
-    const span = Math.max(dMax - dMin, 800);
-    const lo = dMin - span * 0.35, hi = dMax + span * 0.35;
-    const yTop = 56, yBot = 92;
-    const yFor = ml => Math.max(yTop, Math.min(yBot,
-      yBot - (ml - lo) / (hi - lo) * (yBot - yTop)));
+    // Getraenke entfallen (31.08.2026): Fddb schreibt den Tagesstand als
+    // eine kumulierte Messung nach Apple Health und raeumt beim Korrigieren
+    // nicht auf — mal zu viel (Juli), mal zu wenig (31.08.: 3,9 L getrunken,
+    // 0,7 L angekommen). Ein Wert, der sich nicht zuverlaessig fuettern
+    // laesst, ist schlechter als gar keiner. Die Spalte drinks_ml bleibt in
+    // der DB, nur die Anzeige ist weg.
 
     // --- Drei zentrierte Kopfzeilen (nur abgeschlossene Tage) ---
     ctx.textAlign = 'center';
@@ -2302,12 +2299,6 @@
       }
       ctx.textAlign = 'center';
     }
-    if (mls.length) {
-      const avgMl = mls.reduce((s, v) => s + v, 0) / mls.length;
-      ctx.fillStyle = COL_DRINK;
-      ctx.font = 'bold 10px DM Mono, monospace';
-      ctx.fillText('Ø ' + (avgMl / 1000).toFixed(2).replace('.', ',') + ' L Getränke', W / 2, 26);
-    }
     // Ø Eiweiss — nur abgeschlossene Tage, der laufende wuerde den
     // Schnitt jeden Morgen nach unten ziehen.
     const prots = past.map(r => Number(r.protein_g)).filter(v => v > 0);
@@ -2315,7 +2306,7 @@
       const avgP = prots.reduce((s, v) => s + v, 0) / prots.length;
       ctx.fillStyle = avgP >= PROTEIN_GOAL ? COL_GOOD : COL_BAD;
       ctx.font = 'bold 10px DM Mono, monospace';
-      ctx.fillText('Ø ' + Math.round(avgP) + ' g Eiweiß  (Ziel ' + PROTEIN_GOAL + ')', W / 2, 40);
+      ctx.fillText('Ø ' + Math.round(avgP) + ' g Eiweiß  (Ziel ' + PROTEIN_GOAL + ')', W / 2, 26);
     }
     // Schritte entfallen: Whoop erfasst sie nicht zuverlaessig (Pad-Test
     // 15.08.: 132 Schritte in 99 Minuten). Belastung steht jetzt im
@@ -2333,7 +2324,7 @@
       ctx.strokeStyle = 'rgba(232,160,32,0.28)';
       ctx.lineWidth = 1;
       ctx.setLineDash([2, 3]);
-      ctx.beginPath(); ctx.moveTo(sx, 50); ctx.lineTo(sx, 234); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(sx, 38); ctx.lineTo(sx, 176); ctx.stroke();
       ctx.setLineDash([]);
     }
 
@@ -2372,43 +2363,6 @@
                    cx, up ? y0 - h - 5 : y0 + h + 11);
     });
 
-    // --- Linie (Getraenke) ---
-    const pts = rows.map((r, i) => {
-      const ml = Number(r.drinks_ml);
-      return ml > 0 ? { x: padX + slot * i + slot / 2, y: yFor(ml), ml, t: i === tIdx } : null;
-    }).filter(Boolean);
-
-    const solid = pts.filter(p => !p.t);
-    if (solid.length > 1) {
-      ctx.strokeStyle = COL_DRINK;
-      ctx.lineWidth = 2;
-      ctx.lineJoin = 'round';
-      ctx.beginPath();
-      solid.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y));
-      ctx.stroke();
-    }
-    // Anschluss zum laufenden Tag gestrichelt
-    const tPt = pts.find(p => p.t);
-    if (tPt && solid.length) {
-      const last = solid[solid.length - 1];
-      ctx.strokeStyle = COL_DRINK;
-      ctx.lineWidth = 2;
-      ctx.setLineDash([3, 3]);
-      ctx.beginPath(); ctx.moveTo(last.x, last.y); ctx.lineTo(tPt.x, tPt.y); ctx.stroke();
-      ctx.setLineDash([]);
-    }
-    pts.forEach(p => {
-      ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
-      if (p.t) {
-        ctx.strokeStyle = COL_DRINK; ctx.lineWidth = 1.5; ctx.stroke();
-      } else {
-        ctx.fillStyle = COL_DRINK; ctx.fill();
-      }
-      ctx.fillStyle = COL_DRINK;
-      ctx.font = 'bold 8px DM Mono, monospace';
-      ctx.fillText((p.ml / 1000).toFixed(1).replace('.', ',') + ' L', p.x, p.y - 7);
-    });
-
     // --- Tages-Labels ---
     rows.forEach((r, i) => {
       const cx = padX + slot * i + slot / 2;
@@ -2417,10 +2371,10 @@
       const wd = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'][d.getDay()];
       ctx.fillStyle = isT ? COL_TODAY : COL_MUTED;
       ctx.font = isT ? 'bold 9px DM Mono, monospace' : '9px DM Mono, monospace';
-      ctx.fillText(isT ? 'HEUTE' : wd, cx, 194);
+      ctx.fillText(isT ? 'HEUTE' : wd, cx, 136);
       ctx.font = '8px DM Mono, monospace';
       ctx.fillText(String(d.getDate()).padStart(2, '0') + '.'
-                 + String(d.getMonth() + 1).padStart(2, '0'), cx, 204);
+                 + String(d.getMonth() + 1).padStart(2, '0'), cx, 146);
     });
 
     // --- Eiweiss-Streifen ---
@@ -2430,7 +2384,7 @@
     // frueher ist das hier kein Leistungsmass, sondern eine Erinnerung:
     // Rot heisst "da fehlt noch was", nicht "Tag verloren".
     const trackW = Math.min(slot * 0.62, 40);
-    const trackH = 6, trackY = 212;
+    const trackH = 6, trackY = 154;
     rows.forEach((r, i) => {
       const cx = padX + slot * i + slot / 2;
       const isT = i === tIdx;
