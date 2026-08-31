@@ -992,7 +992,7 @@
   // ============================================================
   //  KONFIGURATION
   // ============================================================
-  const BUILD = '2026-08-18 14:00';   // bei jedem Deploy hochsetzen
+  const BUILD = '2026-08-31 10:30';   // bei jedem Deploy hochsetzen
   const SUPABASE_URL = 'https://atzcaxahulifnuvwxcpa.supabase.co';
 
   // ⬇⬇⬇  HIER DEINEN PUBLISHABLE KEY EINSETZEN  ⬇⬇⬇
@@ -1004,6 +1004,11 @@
   // ⬆⬆⬆ ------------------------------------------ ⬆⬆⬆
 
   const GOAL = { weight: 90, fat: 10, absfat: 15, bmi: 27.5 };
+
+  // Untergrenze des Eiweiss-Korridors (130-150 g). Im Defizit und mit
+  // 54 Jahren bewusst hoeher angesetzt als die frueheren 110-130 g:
+  // sonst holt sich der Koerper die Aminosaeuren aus der Muskulatur.
+  const PROTEIN_GOAL = 130;
   (function () {
     const el = document.getElementById('goalHeadline');
     if (el) {
@@ -2204,7 +2209,7 @@
     if (!rows.length) return;
 
     const dpr = window.devicePixelRatio || 1;
-    const H = 215;                    // war 238, Belastungs-Streifen entfaellt
+    const H = 238;                    // 215 + Eiweiss-Streifen unter den Datums-Labels
     canvas.width = canvas.offsetWidth * dpr;
     canvas.height = H * dpr;
     ctx.scale(dpr, dpr);
@@ -2303,6 +2308,15 @@
       ctx.font = 'bold 10px DM Mono, monospace';
       ctx.fillText('Ø ' + (avgMl / 1000).toFixed(2).replace('.', ',') + ' L Getränke', W / 2, 26);
     }
+    // Ø Eiweiss — nur abgeschlossene Tage, der laufende wuerde den
+    // Schnitt jeden Morgen nach unten ziehen.
+    const prots = past.map(r => Number(r.protein_g)).filter(v => v > 0);
+    if (prots.length) {
+      const avgP = prots.reduce((s, v) => s + v, 0) / prots.length;
+      ctx.fillStyle = avgP >= PROTEIN_GOAL ? COL_GOOD : COL_BAD;
+      ctx.font = 'bold 10px DM Mono, monospace';
+      ctx.fillText('Ø ' + Math.round(avgP) + ' g Eiweiß  (Ziel ' + PROTEIN_GOAL + ')', W / 2, 40);
+    }
     // Schritte entfallen: Whoop erfasst sie nicht zuverlaessig (Pad-Test
     // 15.08.: 132 Schritte in 99 Minuten). Belastung steht jetzt im
     // Regenerationsblock (Zahl statt Balken — ein Fuellbalken legt "mehr
@@ -2319,7 +2333,7 @@
       ctx.strokeStyle = 'rgba(232,160,32,0.28)';
       ctx.lineWidth = 1;
       ctx.setLineDash([2, 3]);
-      ctx.beginPath(); ctx.moveTo(sx, 50); ctx.lineTo(sx, 210); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(sx, 50); ctx.lineTo(sx, 234); ctx.stroke();
       ctx.setLineDash([]);
     }
 
@@ -2407,6 +2421,49 @@
       ctx.font = '8px DM Mono, monospace';
       ctx.fillText(String(d.getDate()).padStart(2, '0') + '.'
                  + String(d.getMonth() + 1).padStart(2, '0'), cx, 204);
+    });
+
+    // --- Eiweiss-Streifen ---
+    // Bewusst nur zwei Farben: ab Ziel gruen, darunter rot. Keine gelbe
+    // Zwischenstufe — die Frage ist binaer (Korridor erreicht oder nicht),
+    // eine Mittelstufe wuerde sie aufweichen. Anders als bei den Schritten
+    // frueher ist das hier kein Leistungsmass, sondern eine Erinnerung:
+    // Rot heisst "da fehlt noch was", nicht "Tag verloren".
+    const trackW = Math.min(slot * 0.62, 40);
+    const trackH = 6, trackY = 212;
+    rows.forEach((r, i) => {
+      const cx = padX + slot * i + slot / 2;
+      const isT = i === tIdx;
+      const g = Number(r.protein_g);
+      const x = cx - trackW / 2;
+      ctx.fillStyle = 'rgba(255,255,255,0.08)';       // leere Spur
+      ctx.beginPath(); ctx.roundRect(x, trackY, trackW, trackH, 3); ctx.fill();
+      if (!(g > 0)) {
+        // Tag ohne Daten bleibt Luecke, nicht Null — sonst sieht ein
+        // fehlender HAE-Sync aus wie ein Tag ohne Eiweiss.
+        ctx.fillStyle = COL_MUTED;
+        ctx.font = '8px DM Mono, monospace';
+        ctx.fillText('—', cx, trackY + 18);
+        return;
+      }
+      const col = g >= PROTEIN_GOAL ? COL_GOOD : COL_BAD;
+      const fw = Math.max(2, Math.min(1, g / PROTEIN_GOAL) * trackW);
+      ctx.fillStyle = col;
+      ctx.beginPath(); ctx.roundRect(x, trackY, fw, trackH, 3); ctx.fill();
+      if (isT) {
+        // laufender Tag: gestrichelte Kontur wie beim Delta-Balken —
+        // der Wert ist noch nicht fertig und kein Ergebnis.
+        ctx.strokeStyle = col;
+        ctx.lineWidth = 1;
+        ctx.setLineDash([2, 2]);
+        ctx.beginPath();
+        ctx.roundRect(x - 1, trackY - 1, trackW + 2, trackH + 2, 4);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+      ctx.fillStyle = col;
+      ctx.font = 'bold 9px DM Mono, monospace';
+      ctx.fillText(Math.round(g) + ' g', cx, trackY + 18);
     });
   }
 
