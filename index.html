@@ -992,7 +992,7 @@
   // ============================================================
   //  KONFIGURATION
   // ============================================================
-  const BUILD = '2026-08-31 16:10';   // bei jedem Deploy hochsetzen
+  const BUILD = '2026-09-02 16:20';   // bei jedem Deploy hochsetzen
   const SUPABASE_URL = 'https://atzcaxahulifnuvwxcpa.supabase.co';
 
   // ⬇⬇⬇  HIER DEINEN PUBLISHABLE KEY EINSETZEN  ⬇⬇⬇
@@ -2209,7 +2209,7 @@
     if (!rows.length) return;
 
     const dpr = window.devicePixelRatio || 1;
-    const H = 180;                    // Getraenke-Zeile entfallen, Rest zusammengeschoben
+    const H = 166;                    // eine Kopfzeile statt zwei
     canvas.width = canvas.offsetWidth * dpr;
     canvas.height = H * dpr;
     ctx.scale(dpr, dpr);
@@ -2257,7 +2257,7 @@
     const valid  = past.map(deltaOf).filter(v => v !== null);
     const dAbsMax = Math.max(600, ...valid.map(Math.abs));
 
-    const y0 = 88, maxBarH = 32;     // Nulllinie + max. Balkenhoehe
+    const y0 = 74, maxBarH = 32;     // Nulllinie + max. Balkenhoehe
 
     // Getraenke entfallen (31.08.2026): Fddb schreibt den Tagesstand als
     // eine kumulierte Messung nach Apple Health und raeumt beim Korrigieren
@@ -2267,46 +2267,49 @@
     // der DB, nur die Anzeige ist weg.
 
     // --- Drei zentrierte Kopfzeilen (nur abgeschlossene Tage) ---
-    ctx.textAlign = 'center';
-    if (valid.length) {
-      // Zwei Zahlen in einer Zeile: was die Erfassung rechnet und was der
-      // Koerper tatsaechlich hergibt. Die Luecke dazwischen ist die
-      // eigentliche Information — Tracker ueberschaetzen den Verbrauch,
-      // geschaetzte Portionen unterschaetzen die Aufnahme.
-      const avg = valid.reduce((s, v) => s + v, 0) / valid.length;
-      const real = realKcalPerDay(30);
-      // Vorzeichen in Energiebilanz-Konvention: Aufnahme minus Verbrauch.
-      // Ein Defizit ist damit NEGATIV (weniger gegessen als verbraucht).
-      // Intern rechnet deltaOf weiterhin als "Uebrig" (positiv = Defizit),
-      // weil die Balkenrichtung und die Ampel daran haengen — gedreht wird
-      // nur die Beschriftung.
-      const txtA = 'Ø ' + (avg >= 0 ? '−' : '+')
+    // EINE Kopfzeile: gerechnetes Defizit und Eiweiss-Schnitt, beide
+    // mit eigener Ampel. Der frueher danebenstehende real-Wert (lineare
+    // Regression ueber die Fettmasse) ist am 02.09.2026 entfallen: Er war
+    // als Korrektiv gegen den Faktor-3-Befund gedacht, als BASE_KCAL noch
+    // geschaetzt wurde. Seit der Verbrauch von Whoop gemessen kommt, liegen
+    // beide Werte dicht beieinander (−172 vs. −131) — die Gegenprobe hat
+    // sich erledigt. realKcalPerDay() bleibt als Funktion erhalten, falls
+    // sie je wieder gebraucht wird.
+    const prots = past.map(r => Number(r.protein_g)).filter(v => v > 0);
+    const avgP = prots.length
+      ? prots.reduce((s, v) => s + v, 0) / prots.length : null;
+
+    if (valid.length || avgP !== null) {
+      // Vorzeichen in Energiebilanz-Konvention: Aufnahme minus Verbrauch,
+      // ein Defizit ist NEGATIV. Intern rechnet deltaOf weiter als
+      // "Uebrig" (positiv = Defizit), weil Balkenrichtung und Ampel daran
+      // haengen — gedreht wird nur die Beschriftung.
+      const avg = valid.length
+        ? valid.reduce((s, v) => s + v, 0) / valid.length : null;
+      const txtA = avg === null ? '' : 'Ø ' + (avg >= 0 ? '−' : '+')
         + Math.round(Math.abs(avg)).toLocaleString('de-DE') + ' kcal';
-      const txtB = real === null ? '' : '  real ' + (real.kcal >= 0 ? '−' : '+')
-        + Math.round(Math.abs(real.kcal)).toLocaleString('de-DE')
-        + ' ' + (real.kgWeek <= 0 ? '▼' : '▲')
-        + Math.abs(real.kgWeek).toFixed(2).replace('.', ',') + ' kg/Wo';
+      const txtB = avgP === null ? '' : 'Ø ' + Math.round(avgP) + ' g Protein';
+      const sep  = (txtA && txtB) ? '  /  ' : '';
+
       ctx.font = 'bold 10px DM Mono, monospace';
-      const wA = ctx.measureText(txtA).width;
+      const wA = txtA ? ctx.measureText(txtA).width : 0;
+      const wS = sep  ? ctx.measureText(sep).width  : 0;
       const wB = txtB ? ctx.measureText(txtB).width : 0;
-      const x0 = W / 2 - (wA + wB) / 2;
+      let x = W / 2 - (wA + wS + wB) / 2;
       ctx.textAlign = 'left';
-      ctx.fillStyle = avg >= 0 ? COL_GOOD : COL_BAD;
-      ctx.fillText(txtA, x0, 12);
+      if (txtA) {
+        ctx.fillStyle = avg >= 0 ? COL_GOOD : COL_BAD;
+        ctx.fillText(txtA, x, 12); x += wA;
+      }
+      if (sep) {
+        ctx.fillStyle = COL_MUTED;
+        ctx.fillText(sep, x, 12); x += wS;
+      }
       if (txtB) {
-        ctx.fillStyle = COL_TODAY;   // gold = gemessene Referenz, keine Ampel
-        ctx.fillText(txtB, x0 + wA, 12);
+        ctx.fillStyle = avgP >= PROTEIN_GOAL ? COL_GOOD : COL_BAD;
+        ctx.fillText(txtB, x, 12);
       }
       ctx.textAlign = 'center';
-    }
-    // Ø Eiweiss — nur abgeschlossene Tage, der laufende wuerde den
-    // Schnitt jeden Morgen nach unten ziehen.
-    const prots = past.map(r => Number(r.protein_g)).filter(v => v > 0);
-    if (prots.length) {
-      const avgP = prots.reduce((s, v) => s + v, 0) / prots.length;
-      ctx.fillStyle = avgP >= PROTEIN_GOAL ? COL_GOOD : COL_BAD;
-      ctx.font = 'bold 10px DM Mono, monospace';
-      ctx.fillText('Ø ' + Math.round(avgP) + ' g Eiweiß  (Ziel ' + PROTEIN_GOAL + ')', W / 2, 26);
     }
     // Schritte entfallen: Whoop erfasst sie nicht zuverlaessig (Pad-Test
     // 15.08.: 132 Schritte in 99 Minuten). Belastung steht jetzt im
@@ -2324,7 +2327,7 @@
       ctx.strokeStyle = 'rgba(232,160,32,0.28)';
       ctx.lineWidth = 1;
       ctx.setLineDash([2, 3]);
-      ctx.beginPath(); ctx.moveTo(sx, 38); ctx.lineTo(sx, 176); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(sx, 24); ctx.lineTo(sx, 162); ctx.stroke();
       ctx.setLineDash([]);
     }
 
@@ -2371,10 +2374,10 @@
       const wd = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'][d.getDay()];
       ctx.fillStyle = isT ? COL_TODAY : COL_MUTED;
       ctx.font = isT ? 'bold 9px DM Mono, monospace' : '9px DM Mono, monospace';
-      ctx.fillText(isT ? 'HEUTE' : wd, cx, 136);
+      ctx.fillText(isT ? 'HEUTE' : wd, cx, 122);
       ctx.font = '8px DM Mono, monospace';
       ctx.fillText(String(d.getDate()).padStart(2, '0') + '.'
-                 + String(d.getMonth() + 1).padStart(2, '0'), cx, 146);
+                 + String(d.getMonth() + 1).padStart(2, '0'), cx, 132);
     });
 
     // --- Eiweiss-Streifen ---
@@ -2384,7 +2387,7 @@
     // frueher ist das hier kein Leistungsmass, sondern eine Erinnerung:
     // Rot heisst "da fehlt noch was", nicht "Tag verloren".
     const trackW = Math.min(slot * 0.62, 40);
-    const trackH = 6, trackY = 154;
+    const trackH = 6, trackY = 140;
     rows.forEach((r, i) => {
       const cx = padX + slot * i + slot / 2;
       const isT = i === tIdx;
