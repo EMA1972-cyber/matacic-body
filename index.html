@@ -992,7 +992,7 @@
   // ============================================================
   //  KONFIGURATION
   // ============================================================
-  const BUILD = '2026-09-02 16:20';   // bei jedem Deploy hochsetzen
+  const BUILD = '2026-09-06 13:25';   // bei jedem Deploy hochsetzen
   const SUPABASE_URL = 'https://atzcaxahulifnuvwxcpa.supabase.co';
 
   // ⬇⬇⬇  HIER DEINEN PUBLISHABLE KEY EINSETZEN  ⬇⬇⬇
@@ -1934,36 +1934,29 @@
     const cHr    = ampelHr(hrNow, hrBase);
     const cSleep = COL_SLEEP;   // neutral, keine Wertung
 
-    // --- Gesamtstatus: die schlechteste Einzelampel gibt den Ton an ---
-    let statusTxt = 'Baseline wird aufgebaut', statusCol = COL_MUTED;
-    if (base.length >= 5) {
-      const cols = [cHrv, cHr];   // Schlaf geht bewusst nicht ein
-      if (cols.includes(COL_BAD)) {
-        statusCol = COL_BAD;
-        statusTxt = cHrv === COL_BAD ? 'HRV unter Baseline — Belastung zurücknehmen'
-                  : 'Ruhepuls deutlich erhöht — Tag ruhig angehen';
-      } else if (cols.includes(COL_WARN)) {
-        statusCol = COL_WARN;
-        statusTxt = 'leicht belastet';
-      } else {
-        statusCol = COL_GOOD;
-        statusTxt = 'gut erholt';
-      }
-    }
-
-    // --- Hero: Whoops Erholung % (klein) + Status, oberhalb des Charts ---
+    // --- Hero: Whoops Erholung % + Status — EINE Quelle, EINE Farbe ---
+    // Bis 06.09.2026 liefen hier zwei unabhaengige Bewertungen uebereinander:
+    // die Zahl kam aus Whoops recovery_score (Schwellen 67/34), der Text aus
+    // unserer eigenen HRV/Ruhepuls-Ampel gegen die persoenliche Baseline.
+    // Beide koennen auseinanderlaufen (z.B. 06.09.: Score 50% orange, aber
+    // Text "gut erholt" gruen) — verwirrend, auch wenn beide fuer sich
+    // korrekt waren. Jetzt bestimmt Whoops Score allein Farbe UND Text.
     const heroEl = document.getElementById('regenHero');
     if (heroEl) {
       const lastW = WHOOP.length ? WHOOP[WHOOP.length - 1] : null;
       const rec = (lastW && lastW.recovery_score !== null && lastW.recovery_score !== undefined)
                   ? Number(lastW.recovery_score) : null;
-      let recCol = COL_MUTED;
-      if (rec !== null) recCol = rec >= 67 ? COL_GOOD : (rec >= 34 ? COL_WARN : COL_BAD);
+      let recCol = COL_MUTED, statusTxt = 'Baseline wird aufgebaut';
+      if (rec !== null) {
+        if (rec >= 67)      { recCol = COL_GOOD; statusTxt = 'gut erholt'; }
+        else if (rec >= 34) { recCol = COL_WARN; statusTxt = 'mäßig erholt'; }
+        else                { recCol = COL_BAD;  statusTxt = 'schlecht erholt'; }
+      }
       heroEl.innerHTML =
           '<span style="font-size:1.2rem; font-weight:500; color:' + recCol + ';">'
         + (rec === null ? '–' : Math.round(rec))
         + '<span style="font-size:0.65rem; color:' + recCol + ';">%</span></span>'
-        + '<div style="font-size:0.7rem; font-weight:bold; color:' + statusCol + '; margin-top:1px;">'
+        + '<div style="font-size:0.7rem; font-weight:bold; color:' + recCol + '; margin-top:1px;">'
         + statusTxt + '</div>';
     }
 
