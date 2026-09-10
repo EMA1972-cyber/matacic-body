@@ -935,6 +935,12 @@
   <canvas id="bilanzChart"></canvas>
 </div>
 
+<!-- SYNC-WARNUNG — nur sichtbar, wenn whoop-sync laenger als 3h nicht mehr
+     erfolgreich lief. Grund: Whoop hat ein bekanntes Infrastrukturproblem
+     (Cloudflare 502 waehrend Token-Rotation), das den Sync lautlos stilllegt
+     -- trat am 08./09./10.09.2026 dreimal auf, jeweils unbemerkt. -->
+<div id="syncWarnBanner" style="display:none;"></div>
+
 <!-- REGENERATION -->
 <div class="chart-wrap">
   <div class="chart-title">Regeneration</div>
@@ -942,6 +948,7 @@
   <div id="regenToday" style="margin-bottom:12px;"></div>
   <canvas id="regenChart"></canvas>
 </div>
+
 
 <!-- TABLE -->
 <div class="table-wrap">
@@ -992,7 +999,7 @@
   // ============================================================
   //  KONFIGURATION
   // ============================================================
-  const BUILD = '2026-09-06 13:25';   // bei jedem Deploy hochsetzen
+  const BUILD = '2026-09-10 07:35';   // bei jedem Deploy hochsetzen
   const SUPABASE_URL = 'https://atzcaxahulifnuvwxcpa.supabase.co';
 
   // ⬇⬇⬇  HIER DEINEN PUBLISHABLE KEY EINSETZEN  ⬇⬇⬇
@@ -1653,6 +1660,46 @@
     return await res.json();
   }
 
+  // sync_health — vom Backend bei jedem whoop-sync-Lauf aktualisiert
+  // (Erfolg oder Fehler). Zeigt einen Banner, wenn der letzte erfolgreiche
+  // Lauf zu lange her ist — Whoop hat ein bekanntes Token-Desync-Problem,
+  // das den Sync sonst lautlos stilllegt (siehe Kommentar in whoop-sync).
+  async function fetchSyncHealth() {
+    const url = SUPABASE_URL + '/rest/v1/sync_health?select=*&service=eq.whoop';
+    const res = await fetch(url, {
+      headers: { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + SUPABASE_KEY },
+    });
+    if (!res.ok) return null;
+    const rows = await res.json();
+    return rows && rows[0] ? rows[0] : null;
+  }
+
+  function checkSyncHealth(row) {
+    const el = document.getElementById('syncWarnBanner');
+    if (!el) return;
+    if (!row || !row.last_ok_at) { el.style.display = 'none'; return; }
+
+    const ageMs = Date.now() - new Date(row.last_ok_at).getTime();
+    const ageH  = ageMs / 3600000;
+
+    if (ageH < 3) { el.style.display = 'none'; return; }
+
+    const ageTxt = ageH < 48
+      ? Math.round(ageH) + ' Std.'
+      : Math.round(ageH / 24) + ' Tage';
+
+    el.style.display = 'block';
+    el.innerHTML =
+        '<div style="background:rgba(214,59,59,0.12); border:1px solid #d63b3b;'
+      + ' border-radius:8px; padding:10px 12px; margin-bottom:14px;'
+      + ' font-family:\'DM Mono\',monospace; font-size:0.7rem; color:#d63b3b; line-height:1.5;">'
+      + '⚠ WHOOP-SYNC SEIT ' + ageTxt + ' AUSGEFALLEN<br>'
+      + '<span style="color:#7a7a85; font-size:0.62rem;">'
+      + 'Vermutlich Token-Desync (bekanntes Whoop-Problem). Neu verbinden: '
+      + 'whoop-callback aufrufen, dann Seite neu laden.'
+      + '</span></div>';
+  }
+
   function whNum(v, dec, suffix) {
     if (v === null || v === undefined || v === '') return '–';
     const n = Number(v);
@@ -1770,6 +1817,7 @@
       render();
       updateTableToggle();
       setTimeout(drawChart, 60);
+      fetchSyncHealth().then(checkSyncHealth).catch(function (e) { console.error('SyncHealth:', e); });
       fetchNutrition()
         .then(function (n) {
           NUTRITION = n;
