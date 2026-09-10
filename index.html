@@ -999,7 +999,7 @@
   // ============================================================
   //  KONFIGURATION
   // ============================================================
-  const BUILD = '2026-09-10 07:35';   // bei jedem Deploy hochsetzen
+  const BUILD = '2026-09-10 07:50';   // bei jedem Deploy hochsetzen
   const SUPABASE_URL = 'https://atzcaxahulifnuvwxcpa.supabase.co';
 
   // ⬇⬇⬇  HIER DEINEN PUBLISHABLE KEY EINSETZEN  ⬇⬇⬇
@@ -2011,7 +2011,7 @@
     // --- Detailzeile, jeder Wert in seiner eigenen Ampelfarbe ---
     const segs = [];
     if (isFinite(hrvNow))   segs.push({ t: 'HRV ' + Math.round(hrvNow) + ' ms', c: cHrv });
-    if (isFinite(hrNow))    segs.push({ t: 'Ruhepuls ' + Math.round(hrNow),     c: cHr });
+    if (isFinite(hrNow))    segs.push({ t: 'RHF ' + Math.round(hrNow),     c: cHr });
     if (isFinite(sleepNow)) segs.push({ t: 'Schlaf ' + sleepNow.toFixed(1).replace('.', ',') + ' h', c: cSleep });
     if (segs.length) {
       ctx.font = 'bold 9px DM Mono, monospace';
@@ -2173,7 +2173,7 @@
       const diff = Math.round(hrNow) - Math.round(hrBase);
       ctx.fillStyle = cHr;   // identisch zur Kopfzeile
       ctx.font = '9px DM Mono, monospace';
-      ctx.fillText('Ruhepuls ' + Math.round(hrNow) + ' · Ø ' + Math.round(hrBase)
+      ctx.fillText('RHF ' + Math.round(hrNow) + ' · Ø ' + Math.round(hrBase)
         + ' (' + (diff >= 0 ? '+' : '−') + Math.abs(diff).toFixed(0) + ')'
         + (hrRow && hrRow.day !== rows[rows.length - 1].day
             ? ' · Stand ' + hrRow.day.slice(8) + '.' + hrRow.day.slice(5, 7) + '.' : ''),
