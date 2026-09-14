@@ -1,8 +1,25 @@
 // whoop-sync — holt Recovery / Sleep / Cycles von der Whoop API v2
 // Aufruf: ?key=SYNC_KEY [&days=N]   (N Standard 7, max 25)
 //
-// WICHTIG: Whoop rotiert Refresh-Tokens. Jeder Tausch invalidiert den alten.
-// Der neue Token wird daher IMMER geschrieben, BEVOR die Abfragen starten.
+// 14.09.2026 — Ueberarbeitung nach 4 Token-Ausfaellen in 6 Tagen:
+// Der Fehler kam jedesmal als sauberes "400 invalid_request" DIREKT
+// von Whoop zurueck, nie als Verbindungsabbruch. Das spricht GEGEN
+// einen reinen Cloudflare-502-Netzwerkfehler (Verdacht vom 09.09.) und
+// FUER eine Race Condition: Whoop rotiert den Refresh-Token bei jedem
+// Tausch und invalidiert den alten sofort. Wenn zwei Aufrufe (z.B. der
+// stuendliche Cron + ein manueller Testaufruf) ueberlappend denselben
+// alten Token lesen, gewinnt einer, der andere sendet einen bereits
+// verbrauchten Token und scheitert -- mit genau diesem Fehlerbild.
+//
+// Gegenmassnahmen:
+// 1) Lock ueber refresh_lock_at: Ein Refresh, der vor <20s gestartet
+//    wurde, blockiert einen zweiten parallelen Versuch. Der zweite
+//    wartet kurz und liest dann den (hoffentlich frischen) Token neu.
+// 2) Retry bei Fehler: Token wird nach einem Fehlschlag NEU aus der DB
+//    gelesen (koennte durch den parallelen Prozess erfolgreich erneuert
+//    worden sein) und einmal erneut versucht, bevor die Funktion aufgibt.
+// 3) sync_health_log: echte Historie statt nur des letzten Zustands,
+//    damit sich Haeufigkeit und Muster kuenftig nachvollziehen lassen.
 
 const WHOOP_HOST = 'https://api.prod.whoop.com';
 const TOKEN_URL  = WHOOP_HOST + '/oauth/oauth2/token';
@@ -28,7 +45,10 @@ function jsonOut(obj: unknown, status = 200) {
   });
 }
 
-// Datum in lokaler Zeit (Europe/Berlin) als YYYY-MM-DD
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function berlinDay(iso: string | null | undefined): string | null {
   if (!iso) return null;
   const d = new Date(iso);
@@ -36,7 +56,7 @@ function berlinDay(iso: string | null | undefined): string | null {
   const p = new Intl.DateTimeFormat('en-CA', {
     timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit',
   }).format(d);
-  return p; // en-CA liefert bereits YYYY-MM-DD
+  return p;
 }
 
 function hours(milli: number | null | undefined): number | null {
@@ -44,33 +64,19 @@ function hours(milli: number | null | undefined): number | null {
   return Math.round((milli / 3600000) * 100) / 100;
 }
 
-// Ein Whoop-Zyklus dem Kalendertag zuordnen, an dem der GROESSTE Teil
-// seiner Dauer liegt — nicht dem Tag seines Endzeitpunkts.
-//
-// Grund: Bei sehr spaetem Einschlafen kann ein Zyklus kurz nach
-// Mitternacht enden (z.B. 00:24). berlinDay(end) haette ihn dann komplett
-// dem NEUEN Tag zugeschlagen, obwohl 29 seiner 30 Stunden auf den Vortag
-// entfallen — und der Vortag haette dadurch GAR KEINEN eigenen Zyklus
-// mehr gehabt (14.08.2026 war genau so ein Fall). Gleichzeitig kann der
-// naechste Zyklus AUCH am selben neuen Tag enden, wodurch zwei Zyklen um
-// denselben Tag konkurrieren und sich beim Sync gegenseitig ueberschreiben.
-// Die Mehrheits-Regel loest beide Probleme: jeder Zyklus bekommt genau
-// einen Tag, und es ist der Tag, an dem er tatsaechlich stattfand.
 function majorityDay(startIso: string | null | undefined, endIso: string | null | undefined): string | null {
   if (!startIso) return null;
-  if (!endIso) return berlinDay(new Date().toISOString());   // offener Zyklus = heute
+  if (!endIso) return berlinDay(new Date().toISOString());
 
   const start = new Date(startIso).getTime();
   const end = new Date(endIso).getTime();
   if (!isFinite(start) || !isFinite(end) || end <= start) return berlinDay(endIso);
 
-  // In Stundenschritten durchlaufen und pro Kalendertag zaehlen — reicht
-  // fuer eine Tageszuordnung locker aus, Zyklen dauern selten ueber 48h.
   const tally: Record<string, number> = {};
   let t = start;
   while (t < end) {
     const step = Math.min(3600000, end - t);
-    const day = berlinDay(new Date(t + step / 2).toISOString());   // Zeitpunkt in der Mitte des Schritts
+    const day = berlinDay(new Date(t + step / 2).toISOString());
     if (day) tally[day] = (tally[day] || 0) + step;
     t += step;
   }
@@ -97,27 +103,44 @@ async function logRaw(endpoint: string, payload: unknown) {
   } catch (_e) { /* Log-Fehler duerfen den Sync nicht stoppen */ }
 }
 
-// --- Token holen / erneuern -------------------------------------------------
-async function getAccessToken(notes: string[]): Promise<string> {
+async function pingHealth(ok: boolean, errorMsg: string | null) {
+  try {
+    const row: Record<string, unknown> = {
+      service: 'whoop',
+      last_error: ok ? null : errorMsg,
+      last_error_at: ok ? null : new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    if (ok) row.last_ok_at = new Date().toISOString();
+    await fetch(SB_URL + '/rest/v1/sync_health?on_conflict=service', {
+      method: 'POST',
+      headers: Object.assign({}, SB_HEAD, { prefer: 'resolution=merge-duplicates,return=minimal' }),
+      body: JSON.stringify([row]),
+    });
+    // Historie zusaetzlich zum reinen Ist-Zustand, damit sich Haeufigkeit
+    // und Zeitpunkte spaeter nachvollziehen lassen (sync_health selbst
+    // haelt nur den letzten Stand, kein Log).
+    await fetch(SB_URL + '/rest/v1/sync_health_log', {
+      method: 'POST',
+      headers: Object.assign({}, SB_HEAD, { prefer: 'return=minimal' }),
+      body: JSON.stringify([{ service: 'whoop', ok, error: ok ? null : errorMsg }]),
+    });
+  } catch (_e) { /* darf den Sync nicht stoppen */ }
+}
+
+async function readTokenRow(): Promise<any> {
   const r = await fetch(SB_URL + '/rest/v1/whoop_tokens?id=eq.1&select=*', { headers: SB_HEAD });
   const rows = await r.json();
   if (!Array.isArray(rows) || rows.length === 0) {
     throw new Error('Keine Tokens in whoop_tokens. Erst whoop-callback aufrufen.');
   }
-  const t = rows[0];
-  const expMs = t.expires_at ? new Date(t.expires_at).getTime() : 0;
+  return rows[0];
+}
 
-  // 2 Minuten Puffer
-  if (expMs > Date.now() + 120000 && t.access_token) {
-    notes.push('Access-Token noch gueltig');
-    return t.access_token;
-  }
-
-  if (!t.refresh_token) throw new Error('Kein Refresh-Token gespeichert.');
-
+async function doRefresh(refreshToken: string): Promise<any> {
   const body = new URLSearchParams({
     grant_type: 'refresh_token',
-    refresh_token: t.refresh_token,
+    refresh_token: refreshToken,
     client_id: CLIENT_ID,
     client_secret: CLIENT_SECRET,
     scope: 'offline',
@@ -128,26 +151,104 @@ async function getAccessToken(notes: string[]): Promise<string> {
     body: body,
   });
   const txt = await res.text();
-  if (!res.ok) throw new Error('Token-Refresh fehlgeschlagen (HTTP ' + res.status + '): ' + txt.slice(0, 200));
+  if (!res.ok) {
+    const err: any = new Error('Token-Refresh fehlgeschlagen (HTTP ' + res.status + '): ' + txt.slice(0, 200));
+    err.httpStatus = res.status;
+    throw err;
+  }
+  return JSON.parse(txt);
+}
 
-  const tok = JSON.parse(txt);
-
-  // ZUERST speichern, DANN weiterarbeiten — sonst Aussperrung bei Abbruch
+async function saveToken(tok: any, fallbackRefresh: string) {
   const save = await fetch(SB_URL + '/rest/v1/whoop_tokens?on_conflict=id', {
     method: 'POST',
     headers: Object.assign({}, SB_HEAD, { prefer: 'resolution=merge-duplicates,return=minimal' }),
     body: JSON.stringify([{
       id: 1,
       access_token: tok.access_token,
-      refresh_token: tok.refresh_token || t.refresh_token,
+      refresh_token: tok.refresh_token || fallbackRefresh,
       expires_at: new Date(Date.now() + (tok.expires_in || 3600) * 1000).toISOString(),
+      refresh_lock_at: null,
       updated_at: new Date().toISOString(),
     }]),
   });
   if (!save.ok) throw new Error('Neuer Token konnte NICHT gespeichert werden — Abbruch vor Abfrage.');
+}
 
-  notes.push('Token erneuert' + (tok.refresh_token ? ' (Refresh-Token rotiert)' : ''));
-  return tok.access_token;
+async function setLock() {
+  await fetch(SB_URL + '/rest/v1/whoop_tokens?id=eq.1', {
+    method: 'PATCH',
+    headers: Object.assign({}, SB_HEAD, { prefer: 'return=minimal' }),
+    body: JSON.stringify({ refresh_lock_at: new Date().toISOString() }),
+  });
+}
+
+async function clearLock() {
+  await fetch(SB_URL + '/rest/v1/whoop_tokens?id=eq.1', {
+    method: 'PATCH',
+    headers: Object.assign({}, SB_HEAD, { prefer: 'return=minimal' }),
+    body: JSON.stringify({ refresh_lock_at: null }),
+  });
+}
+
+async function getAccessToken(notes: string[]): Promise<string> {
+  let t = await readTokenRow();
+  const expMs = t.expires_at ? new Date(t.expires_at).getTime() : 0;
+
+  if (expMs > Date.now() + 120000 && t.access_token) {
+    notes.push('Access-Token noch gueltig');
+    return t.access_token;
+  }
+
+  // Lock-Check: laeuft gerade ein anderer Refresh (angestossen < 20s)?
+  const lockMs = t.refresh_lock_at ? new Date(t.refresh_lock_at).getTime() : 0;
+  if (lockMs && Date.now() - lockMs < 20000) {
+    notes.push('Anderer Refresh laeuft bereits — warte kurz und lese neu');
+    await sleep(4000);
+    t = await readTokenRow();
+    const expMs2 = t.expires_at ? new Date(t.expires_at).getTime() : 0;
+    if (expMs2 > Date.now() + 60000 && t.access_token) {
+      notes.push('Token wurde vom parallelen Prozess bereits erneuert');
+      return t.access_token;
+    }
+    // sonst normal weitermachen, evtl. ist der andere Prozess gescheitert
+  }
+
+  if (!t.refresh_token) throw new Error('Kein Refresh-Token gespeichert.');
+
+  await setLock();
+  try {
+    let tok;
+    try {
+      tok = await doRefresh(t.refresh_token);
+    } catch (firstErr) {
+      // Retry: Token frisch aus der DB lesen (koennte inzwischen von
+      // einem parallelen Aufruf erneuert worden sein) und einmal erneut
+      // versuchen, statt sofort aufzugeben.
+      notes.push('Erster Refresh-Versuch fehlgeschlagen, versuche erneut mit frischem Token');
+      await sleep(1500);
+      const fresh = await readTokenRow();
+      const freshExp = fresh.expires_at ? new Date(fresh.expires_at).getTime() : 0;
+      if (freshExp > Date.now() + 60000 && fresh.access_token) {
+        notes.push('Frischer Token war bereits da (paralleler Prozess war erfolgreich)');
+        return fresh.access_token;
+      }
+      if (fresh.refresh_token === t.refresh_token) {
+        // gleicher Token wie beim ersten Versuch -> kein anderer Prozess
+        // war erfolgreich, wirklich erneut mit demselben Token versuchen
+        tok = await doRefresh(fresh.refresh_token);
+      } else {
+        tok = await doRefresh(fresh.refresh_token);
+      }
+      notes.push('Zweiter Refresh-Versuch erfolgreich');
+    }
+
+    await saveToken(tok, t.refresh_token);
+    notes.push('Token erneuert' + (tok.refresh_token ? ' (Refresh-Token rotiert)' : ''));
+    return tok.access_token;
+  } finally {
+    await clearLock();
+  }
 }
 
 async function whoopGet(path: string, token: string, params: Record<string, string>) {
@@ -161,8 +262,6 @@ async function whoopGet(path: string, token: string, params: Record<string, stri
   return data;
 }
 
-// PostgREST verlangt bei Sammel-Upserts identische Feldmengen je Zeile.
-// Darum nach Feld-Signatur gruppieren und in mehreren Requests schreiben.
 async function upsertDaily(rows: Record<string, any>[]): Promise<number> {
   const groups: Record<string, Record<string, any>[]> = {};
   for (const row of rows) {
@@ -203,7 +302,6 @@ Deno.serve(async (req) => {
     const start = new Date(end.getTime() - days * 86400000);
     const range = { start: start.toISOString(), end: end.toISOString(), limit: '25' };
 
-    // pro Tag ein Objekt, wird aus drei Quellen gefuellt
     const byDay: Record<string, Record<string, any>> = {};
     const put = (day: string | null, patch: Record<string, any>) => {
       if (!day) return;
@@ -211,11 +309,10 @@ Deno.serve(async (req) => {
       Object.assign(byDay[day], patch);
     };
 
-    // --- Sleep: Tag = Datum des Aufwachens (end) --------------------------
     const sleepDayById: Record<string, string> = {};
-    const sleep = await whoopGet('/activity/sleep', token, range);
-    for (const rec of (sleep.records || [])) {
-      if (rec.nap) continue;                      // Nickerchen nicht als Nacht werten
+    const sleepData = await whoopGet('/activity/sleep', token, range);
+    for (const rec of (sleepData.records || [])) {
+      if (rec.nap) continue;
       const day = berlinDay(rec.end);
       if (!day) continue;
       sleepDayById[String(rec.id)] = day;
@@ -237,9 +334,8 @@ Deno.serve(async (req) => {
         respiratory_rate: round(s.respiratory_rate, 2),
       });
     }
-    notes.push('Sleep: ' + (sleep.records || []).length + ' Datensaetze');
+    notes.push('Sleep: ' + (sleepData.records || []).length + ' Datensaetze');
 
-    // --- Recovery: haengt am Schlaf, daher ueber sleep_id zuordnen --------
     const rec_ = await whoopGet('/recovery', token, range);
     for (const rec of (rec_.records || [])) {
       const day = sleepDayById[String(rec.sleep_id)] || berlinDay(rec.created_at);
@@ -254,14 +350,6 @@ Deno.serve(async (req) => {
     }
     notes.push('Recovery: ' + (rec_.records || []).length + ' Datensaetze');
 
-    // --- Cycles: Tag = wo der GROESSTE Teil der Zyklusdauer liegt ---------
-    // Nicht mehr "Tag des Endzeitpunkts" — das fuehrte bei sehr spaetem
-    // Einschlafen dazu, dass ein Tag GAR KEINEN eigenen Zyklus bekam
-    // (14.08.2026: Zyklus lief 13.08 18:47 bis 15.08 00:24, wurde aber
-    // komplett dem 15.08 zugeschlagen) UND gleichzeitig zwei Zyklen um
-    // denselben Folgetag konkurrierten. Offene Zyklen zuerst verarbeiten,
-    // geschlossene danach, damit ein vollstaendiger Tag nicht von einem
-    // gerade erst gestarteten neuen Zyklus ueberschrieben wird.
     const cyc = await whoopGet('/cycle', token, range);
     const cycles = (cyc.records || []).slice().sort(function (a, b) {
       return (a.end ? 1 : 0) - (b.end ? 1 : 0);
@@ -277,17 +365,11 @@ Deno.serve(async (req) => {
         day_strain: round(s.strain, 2),
         avg_hr: round(s.average_heart_rate, 0),
         max_hr: round(s.max_heart_rate, 0),
-        // Kilojoule = GESAMTumsatz des Tages, nicht nur Aktivkalorien
         kcal_out_whoop: s.kilojoule ? round(s.kilojoule / 4.184, 0) : null,
       });
     }
     notes.push('Cycles: ' + cycles.length + ' Datensaetze');
 
-    // --- Body Measurement: Whoops Rechengrundlage -------------------------
-    // Aendert sich NUR durch manuelles Nachziehen im Whoop-Profil. Der
-    // Apple-Health-Import fuettert die Trendanzeige, NICHT diese Werte.
-    // Deshalb pro Tag mitschreiben — so wird sichtbar, ab wann die
-    // Kalorienrechnung auf einem veralteten Gewicht steht.
     try {
       const bm = await whoopGet('/user/measurement/body', token, {});
       put(berlinDay(new Date().toISOString()), {
@@ -297,7 +379,6 @@ Deno.serve(async (req) => {
       });
       notes.push('Profil: ' + bm.weight_kilogram + ' kg · max ' + bm.max_heart_rate + ' bpm');
     } catch (e) {
-      // Darf den Sync nicht kippen — die Tageswerte sind wichtiger.
       notes.push('Body-Measurement nicht abrufbar: ' + String(e));
     }
 
@@ -308,6 +389,8 @@ Deno.serve(async (req) => {
 
     const written = rows.length ? await upsertDaily(rows) : 0;
 
+    await pingHealth(true, null);
+
     return jsonOut({
       ok: true,
       zeitraum_tage: days,
@@ -316,6 +399,9 @@ Deno.serve(async (req) => {
       hinweise: notes,
     });
   } catch (e) {
-    return jsonOut({ ok: false, fehler: String(e && (e as Error).message || e), hinweise: notes }, 500);
+    const msg = String(e && (e as Error).message || e);
+    try { await clearLock(); } catch (_e) { /* egal */ }
+    await pingHealth(false, msg);
+    return jsonOut({ ok: false, fehler: msg, hinweise: notes }, 500);
   }
 });
