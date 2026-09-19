@@ -932,6 +932,7 @@
 <!-- BILANZ -->
 <div class="chart-wrap">
   <div class="chart-title">Bilanz</div>
+  <div id="bilanzBands" style="margin-bottom:10px;"></div>
   <canvas id="bilanzChart"></canvas>
 </div>
 
@@ -999,7 +1000,7 @@
   // ============================================================
   //  KONFIGURATION
   // ============================================================
-  const BUILD = '2026-09-19 17:05';   // bei jedem Deploy hochsetzen
+  const BUILD = '2026-09-19 17:40';   // bei jedem Deploy hochsetzen
   const SUPABASE_URL = 'https://atzcaxahulifnuvwxcpa.supabase.co';
 
   // ⬇⬇⬇  HIER DEINEN PUBLISHABLE KEY EINSETZEN  ⬇⬇⬇
@@ -2503,6 +2504,82 @@
       ctx.font = 'bold 9px DM Mono, monospace';
       ctx.fillText(Math.round(g) + ' g', cx, trackY + 18);
     });
+
+    drawBands(COL_GOOD, COL_MUTED, COL_TODAY, whoopByDay,
+              STRAIN_TRAIN, KCAL_BAND);
+  }
+
+  // Ist/Ziel je Tagestyp ueber dem Bilanz-Diagramm.
+  //
+  // Zweck: Der Korridor (KCAL_BAND) stammt aus gemessenen Whoop-Umsaetzen
+  // vom 19.09.2026. Umsaetze aendern sich aber — mit dem Gewicht, mit der
+  // Trainingsdauer, mit der Jahreszeit. Ohne Gegenprobe wuerde eine einmal
+  // gesetzte Zahl still veralten. Deshalb rechnet der Block die Korridore
+  // fortlaufend neu und meldet sich selbst, wenn sie abweichen — niemand
+  // muss daran denken.
+  function drawBands(COL_GOOD, COL_MUTED, COL_TODAY, whoopByDay,
+                     STRAIN_TRAIN, KCAL_BAND) {
+    const box = document.getElementById('bilanzBands');
+    if (!box) return;
+    const DEFICIT = 500;              // Zieldefizit, auf dem der Korridor steht
+
+    const todayStr = bilanzIso(new Date());
+    const isTrainDay = day => Number((whoopByDay[day] || {}).day_strain) >= STRAIN_TRAIN;
+
+    // Ist: Aufnahme der letzten 7 abgeschlossenen Tage, getrennt nach Typ.
+    const last7 = NUTRITION.filter(r => r.day < todayStr).slice(-7);
+    const mean = a => a.length ? a.reduce((s, v) => s + v, 0) / a.length : null;
+    const istOf = train => mean(last7
+      .filter(r => isTrainDay(r.day) === train && Number(r.kcal_in) > 0)
+      .map(r => Number(r.kcal_in)));
+
+    // Gegenprobe: gemessener Umsatz der letzten 30 Tage je Typ.
+    const cut = new Date(); cut.setDate(cut.getDate() - 30);
+    const cutStr = bilanzIso(cut);
+    const umsatzOf = train => mean(WHOOP
+      .filter(w => w.day >= cutStr && w.day < todayStr && !w.cycle_open
+                && Number(w.kcal_out_whoop) > 1200
+                && isTrainDay(w.day) === train)
+      .map(w => Number(w.kcal_out_whoop)));
+
+    const fmt = v => Math.round(v).toLocaleString('de-DE');
+    const cell = (label, ist, band, farbe) => {
+      const inBand = ist !== null && ist >= band[0] && ist <= band[1];
+      const istTxt = ist === null ? '—' : fmt(ist);
+      return '<div style="flex:1; text-align:center;">'
+        + '<div style="font-size:0.55rem; letter-spacing:0.1em; color:' + farbe
+        + '; text-transform:uppercase;">' + label + '</div>'
+        + '<div style="font-size:0.95rem; font-weight:700; margin-top:2px; color:'
+        + (inBand ? COL_GOOD : '#c9c9d4') + ';">' + istTxt + '</div>'
+        + '<div style="font-size:0.6rem; color:' + COL_MUTED + '; margin-top:1px;">Ziel '
+        + fmt(band[0]) + '–' + fmt(band[1]) + '</div></div>';
+    };
+
+    let html = '<div style="display:flex; gap:8px;">'
+      + cell('Trainingstage', istOf(true),  KCAL_BAND.train, '#5bc8f5')
+      + cell('Ruhetage',      istOf(false), KCAL_BAND.rest,  COL_MUTED)
+      + '</div>';
+
+    // Driftwarnung: weicht der aus dem Umsatz abgeleitete Korridor um mehr
+    // als 100 kcal ab, gehoert er neu gerechnet. 100 ist bewusst traege —
+    // Tagesrauschen soll den Hinweis nicht staendig ausloesen.
+    const hinweise = [];
+    [['Trainingstage', umsatzOf(true), KCAL_BAND.train],
+     ['Ruhetage', umsatzOf(false), KCAL_BAND.rest]].forEach(([n, u, b]) => {
+      if (u === null) return;
+      const soll = u - DEFICIT;            // Untergrenze des neuen Korridors
+      if (Math.abs(soll - b[0]) > 100) {
+        hinweise.push(n + ': Umsatz Ø ' + fmt(u) + ' → Korridor eher '
+          + fmt(soll) + '–' + fmt(soll + 100));
+      }
+    });
+    if (hinweise.length) {
+      html += '<div style="margin-top:8px; padding:6px 8px; border-radius:6px;'
+        + ' background:rgba(232,160,32,0.10); border:1px solid rgba(232,160,32,0.35);'
+        + ' font-size:0.6rem; line-height:1.5; color:' + COL_TODAY + ';">'
+        + 'Korridor prüfen — ' + hinweise.join(' · ') + '</div>';
+    }
+    box.innerHTML = html;
   }
 
   // Alle Daten neu holen und neu zeichnen — ohne Sync anzustossen.
