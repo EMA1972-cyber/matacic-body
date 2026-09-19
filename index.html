@@ -999,7 +999,7 @@
   // ============================================================
   //  KONFIGURATION
   // ============================================================
-  const BUILD = '2026-09-10 07:50';   // bei jedem Deploy hochsetzen
+  const BUILD = '2026-09-19 16:10';   // bei jedem Deploy hochsetzen
   const SUPABASE_URL = 'https://atzcaxahulifnuvwxcpa.supabase.co';
 
   // ⬇⬇⬇  HIER DEINEN PUBLISHABLE KEY EINSETZEN  ⬇⬇⬇
@@ -2250,7 +2250,7 @@
     if (!rows.length) return;
 
     const dpr = window.devicePixelRatio || 1;
-    const H = 166;                    // eine Kopfzeile statt zwei
+    const H = 180;                    // +14 fuer die Zeile mit der Aufnahme
     canvas.width = canvas.offsetWidth * dpr;
     canvas.height = H * dpr;
     ctx.scale(dpr, dpr);
@@ -2260,6 +2260,13 @@
     const COL_MUTED = '#7a7a85';
     const COL_GOOD = '#3dd68c', COL_BAD = '#d63b3b';
     const COL_TODAY = '#e8a020';
+    const COL_TRAIN = '#5bc8f5';      // Trainingstag (Gym oder Rad)
+    // Ab hier gilt ein Tag als Trainingstag. Whoops Belastung ist eine
+    // logarithmische Skala: ein reiner Buerotag liegt bei 4-8, ein Tag mit
+    // Spaziergang bei 8-9, eine echte Einheit ab 10 (Gym 10,9 / 11,9,
+    // Samstags-Einheit 13,9). Die Schwelle trennt damit Alltag von Training,
+    // nicht leicht von schwer.
+    const STRAIN_TRAIN = 10;
     const padX = 8;
     const slot = (W - padX * 2) / rows.length;
     const barW = Math.min(slot * 0.52, 32);
@@ -2368,7 +2375,7 @@
       ctx.strokeStyle = 'rgba(232,160,32,0.28)';
       ctx.lineWidth = 1;
       ctx.setLineDash([2, 3]);
-      ctx.beginPath(); ctx.moveTo(sx, 24); ctx.lineTo(sx, 162); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(sx, 24); ctx.lineTo(sx, 176); ctx.stroke();
       ctx.setLineDash([]);
     }
 
@@ -2413,12 +2420,32 @@
       const isT = i === tIdx;
       const d = new Date(r.day + 'T12:00:00');
       const wd = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'][d.getDay()];
-      ctx.fillStyle = isT ? COL_TODAY : COL_MUTED;
-      ctx.font = isT ? 'bold 9px DM Mono, monospace' : '9px DM Mono, monospace';
+      const strain = Number((whoopByDay[r.day] || {}).day_strain);
+      const isTrain = strain >= STRAIN_TRAIN;
+      ctx.fillStyle = isT ? COL_TODAY : (isTrain ? COL_TRAIN : COL_MUTED);
+      ctx.font = (isT || isTrain) ? 'bold 9px DM Mono, monospace'
+                                  : '9px DM Mono, monospace';
       ctx.fillText(isT ? 'HEUTE' : wd, cx, 122);
       ctx.font = '8px DM Mono, monospace';
+      // Datum bleibt auch am laufenden Tag blau, wenn schon trainiert wurde —
+      // die Frage "war heute Belastung?" ist dann bereits beantwortet.
+      if (isTrain) ctx.fillStyle = COL_TRAIN;
       ctx.fillText(String(d.getDate()).padStart(2, '0') + '.'
                  + String(d.getMonth() + 1).padStart(2, '0'), cx, 132);
+    });
+
+    // --- Aufnahme absolut ---
+    // Der Balken zeigt das Delta, diese Zeile den Wert, den man selbst
+    // steuert. Zusammen beantworten sie die eigentliche Frage: passt mein
+    // Planwert zum Ziel-Delta? Bewusst ohne Ampel — ob 1.500 oder 1.700
+    // richtig sind, haengt am Tag, nicht an einer festen Grenze.
+    rows.forEach((r, i) => {
+      const cx = padX + slot * i + slot / 2;
+      const isT = i === tIdx;
+      const k = Number(r.kcal_in);
+      ctx.font = isT ? 'bold 9px DM Mono, monospace' : '9px DM Mono, monospace';
+      ctx.fillStyle = isT ? COL_TODAY : '#c9c9d4';
+      ctx.fillText(k > 0 ? k.toLocaleString('de-DE') : '—', cx, 145);
     });
 
     // --- Eiweiss-Streifen ---
@@ -2428,7 +2455,7 @@
     // frueher ist das hier kein Leistungsmass, sondern eine Erinnerung:
     // Rot heisst "da fehlt noch was", nicht "Tag verloren".
     const trackW = Math.min(slot * 0.62, 40);
-    const trackH = 6, trackY = 140;
+    const trackH = 6, trackY = 154;
     rows.forEach((r, i) => {
       const cx = padX + slot * i + slot / 2;
       const isT = i === tIdx;
