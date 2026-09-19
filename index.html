@@ -999,7 +999,7 @@
   // ============================================================
   //  KONFIGURATION
   // ============================================================
-  const BUILD = '2026-09-19 16:10';   // bei jedem Deploy hochsetzen
+  const BUILD = '2026-09-19 17:05';   // bei jedem Deploy hochsetzen
   const SUPABASE_URL = 'https://atzcaxahulifnuvwxcpa.supabase.co';
 
   // ⬇⬇⬇  HIER DEINEN PUBLISHABLE KEY EINSETZEN  ⬇⬇⬇
@@ -2267,6 +2267,11 @@
     // Samstags-Einheit 13,9). Die Schwelle trennt damit Alltag von Training,
     // nicht leicht von schwer.
     const STRAIN_TRAIN = 10;
+    // Zielkorridor der Aufnahme, je nach Tagestyp. Hergeleitet aus den
+    // gemessenen Whoop-Umsaetzen (30 Tage, 20.09.2026): Tage mit Strain
+    // >= 10 liegen im Mittel bei 2.418 kcal, darunter bei 1.976. Ein
+    // Defizit von ~500 trifft damit 1.800-1.900 bzw. 1.400-1.500.
+    const KCAL_BAND = { train: [1800, 1900], rest: [1400, 1500] };
     const padX = 8;
     const slot = (W - padX * 2) / rows.length;
     const barW = Math.min(slot * 0.52, 32);
@@ -2443,8 +2448,16 @@
       const cx = padX + slot * i + slot / 2;
       const isT = i === tIdx;
       const k = Number(r.kcal_in);
-      ctx.font = isT ? 'bold 9px DM Mono, monospace' : '9px DM Mono, monospace';
-      ctx.fillStyle = isT ? COL_TODAY : '#c9c9d4';
+      const st = Number((whoopByDay[r.day] || {}).day_strain);
+      const band = st >= STRAIN_TRAIN ? KCAL_BAND.train : KCAL_BAND.rest;
+      const inBand = k >= band[0] && k <= band[1];
+      ctx.font = (isT || inBand) ? 'bold 9px DM Mono, monospace'
+                                 : '9px DM Mono, monospace';
+      // Der laufende Tag bleibt neutral: Die Aufnahme ist noch nicht fertig,
+      // ein rotes 1.200 um die Mittagszeit waere schlicht falsch. Erst der
+      // abgeschlossene Tag bekommt eine Ampel.
+      ctx.fillStyle = isT ? COL_TODAY
+                          : (k > 0 ? (inBand ? COL_GOOD : COL_MUTED) : COL_MUTED);
       ctx.fillText(k > 0 ? k.toLocaleString('de-DE') : '—', cx, 145);
     });
 
