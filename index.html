@@ -1009,7 +1009,7 @@
   // ============================================================
   //  KONFIGURATION
   // ============================================================
-  const BUILD = '2026-09-20 09:35';   // bei jedem Deploy hochsetzen
+  const BUILD = '2026-09-20 10:20';   // bei jedem Deploy hochsetzen
   const SUPABASE_URL = 'https://atzcaxahulifnuvwxcpa.supabase.co';
 
   // ⬇⬇⬇  HIER DEINEN PUBLISHABLE KEY EINSETZEN  ⬇⬇⬇
@@ -2289,7 +2289,7 @@
     if (!rows.length) return;
 
     const dpr = window.devicePixelRatio || 1;
-    const H = 180;                    // +14 fuer die Zeile mit der Aufnahme
+    const H = 192;                    // Strain- und Aufnahme-Zeile
     canvas.width = canvas.offsetWidth * dpr;
     canvas.height = H * dpr;
     ctx.scale(dpr, dpr);
@@ -2310,7 +2310,22 @@
     // gemessenen Whoop-Umsaetzen (30 Tage, 20.09.2026): Tage mit Strain
     // >= 10 liegen im Mittel bei 2.418 kcal, darunter bei 1.976. Ein
     // Defizit von ~500 trifft damit 1.800-1.900 bzw. 1.400-1.500.
-    const KCAL_BAND = { train: [1800, 1900], rest: [1400, 1500] };
+    // Drei Stufen, hergeleitet aus den gemessenen Whoop-Umsaetzen
+    // (01.08.-20.09.2026, jeweils Umsatz minus ~500 kcal Zieldefizit):
+    //   Strain < 10  → Ø 1.960 kcal  (Buerotag, Spaziergang, Ruhetag)
+    //   Strain 10-14 → Ø 2.166 kcal  (normales Gym, kurze Radrunde)
+    //   Strain >= 14 → Ø 3.131 kcal  (harte Einheit, lange Tour)
+    //
+    // Bewusst DREI und nicht vier Stufen: Tage unter 6 und Tage zwischen
+    // 6 und 10 kosten praktisch identisch viel (1.965 vs. 1.957). Eine
+    // zusaetzliche Grenze haette eine Genauigkeit vorgetaeuscht, die die
+    // Daten nicht hergeben. Spaziergaenge erzeugen Strain, aber kaum Umsatz.
+    const KCAL_STUFEN = [
+      { bis: 10,       band: [1450, 1550], kurz: 'bis 10' },
+      { bis: 14,       band: [1650, 1750], kurz: '10–14'  },
+      { bis: Infinity, band: [2400, 2600], kurz: 'ab 14'  }
+    ];
+    const stufeFor = st => KCAL_STUFEN.find(x => !(st >= x.bis)) || KCAL_STUFEN[0];
     const padX = 8;
     const slot = (W - padX * 2) / rows.length;
     const barW = Math.min(slot * 0.52, 32);
@@ -2419,7 +2434,7 @@
       ctx.strokeStyle = 'rgba(232,160,32,0.28)';
       ctx.lineWidth = 1;
       ctx.setLineDash([2, 3]);
-      ctx.beginPath(); ctx.moveTo(sx, 24); ctx.lineTo(sx, 176); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(sx, 24); ctx.lineTo(sx, 188); ctx.stroke();
       ctx.setLineDash([]);
     }
 
@@ -2478,6 +2493,17 @@
                  + String(d.getMonth() + 1).padStart(2, '0'), cx, 132);
     });
 
+    // --- Belastung je Tag ---
+    // Steht bewusst direkt ueber der Aufnahme: der Strain bestimmt den
+    // Korridor, die beiden Zahlen gehoeren zusammen gelesen.
+    rows.forEach((r, i) => {
+      const cx = padX + slot * i + slot / 2;
+      const st = Number((whoopByDay[r.day] || {}).day_strain);
+      ctx.font = '8px DM Mono, monospace';
+      ctx.fillStyle = isFinite(st) && st >= STRAIN_TRAIN ? COL_TRAIN : COL_MUTED;
+      ctx.fillText(isFinite(st) ? st.toFixed(1).replace('.', ',') : '—', cx, 145);
+    });
+
     // --- Aufnahme absolut ---
     // Der Balken zeigt das Delta, diese Zeile den Wert, den man selbst
     // steuert. Zusammen beantworten sie die eigentliche Frage: passt mein
@@ -2488,7 +2514,7 @@
       const isT = i === tIdx;
       const k = Number(r.kcal_in);
       const st = Number((whoopByDay[r.day] || {}).day_strain);
-      const band = st >= STRAIN_TRAIN ? KCAL_BAND.train : KCAL_BAND.rest;
+      const band = stufeFor(st).band;
       const inBand = k >= band[0] && k <= band[1];
       ctx.font = (isT || inBand) ? 'bold 9px DM Mono, monospace'
                                  : '9px DM Mono, monospace';
@@ -2497,7 +2523,7 @@
       // abgeschlossene Tag bekommt eine Ampel.
       ctx.fillStyle = isT ? COL_TODAY
                           : (k > 0 ? (inBand ? COL_GOOD : COL_MUTED) : COL_MUTED);
-      ctx.fillText(k > 0 ? k.toLocaleString('de-DE') : '—', cx, 145);
+      ctx.fillText(k > 0 ? k.toLocaleString('de-DE') : '—', cx, 157);
     });
 
     // --- Eiweiss-Streifen ---
@@ -2507,7 +2533,7 @@
     // frueher ist das hier kein Leistungsmass, sondern eine Erinnerung:
     // Rot heisst "da fehlt noch was", nicht "Tag verloren".
     const trackW = Math.min(slot * 0.62, 40);
-    const trackH = 6, trackY = 154;
+    const trackH = 6, trackY = 166;
     rows.forEach((r, i) => {
       const cx = padX + slot * i + slot / 2;
       const isT = i === tIdx;
@@ -2543,72 +2569,72 @@
       ctx.fillText(Math.round(g) + ' g', cx, trackY + 18);
     });
 
-    drawBands(COL_GOOD, COL_MUTED, COL_TODAY, whoopByDay,
-              STRAIN_TRAIN, KCAL_BAND);
+    drawBands(COL_GOOD, COL_MUTED, COL_TODAY, COL_TRAIN,
+              whoopByDay, KCAL_STUFEN, stufeFor);
   }
 
   // Ist/Ziel je Tagestyp ueber dem Bilanz-Diagramm.
   //
-  // Zweck: Der Korridor (KCAL_BAND) stammt aus gemessenen Whoop-Umsaetzen
-  // vom 19.09.2026. Umsaetze aendern sich aber — mit dem Gewicht, mit der
+  // Zweck: Die Korridore (KCAL_STUFEN) stammen aus gemessenen Whoop-Umsaetzen
+  // vom 20.09.2026. Umsaetze aendern sich aber — mit dem Gewicht, mit der
   // Trainingsdauer, mit der Jahreszeit. Ohne Gegenprobe wuerde eine einmal
   // gesetzte Zahl still veralten. Deshalb rechnet der Block die Korridore
   // fortlaufend neu und meldet sich selbst, wenn sie abweichen — niemand
   // muss daran denken.
-  function drawBands(COL_GOOD, COL_MUTED, COL_TODAY, whoopByDay,
-                     STRAIN_TRAIN, KCAL_BAND) {
+  function drawBands(COL_GOOD, COL_MUTED, COL_TODAY, COL_TRAIN,
+                     whoopByDay, KCAL_STUFEN, stufeFor) {
     const box = document.getElementById('bilanzBands');
     if (!box) return;
-    const DEFICIT = 500;              // Zieldefizit, auf dem der Korridor steht
+    const DEFICIT = 500;              // Zieldefizit, auf dem die Korridore stehen
 
     const todayStr = bilanzIso(new Date());
-    const isTrainDay = day => Number((whoopByDay[day] || {}).day_strain) >= STRAIN_TRAIN;
-
-    // Ist: Aufnahme der letzten 7 abgeschlossenen Tage, getrennt nach Typ.
-    const last7 = NUTRITION.filter(r => r.day < todayStr).slice(-7);
+    const strainOf = day => Number((whoopByDay[day] || {}).day_strain);
     const mean = a => a.length ? a.reduce((s, v) => s + v, 0) / a.length : null;
-    const istOf = train => mean(last7
-      .filter(r => isTrainDay(r.day) === train && Number(r.kcal_in) > 0)
-      .map(r => Number(r.kcal_in)));
+    const fmt  = v => Math.round(v).toLocaleString('de-DE');
 
-    // Gegenprobe: gemessener Umsatz der letzten 30 Tage je Typ.
+    // Ist: Aufnahme der letzten 14 abgeschlossenen Tage je Stufe. Bewusst 14
+    // statt 7 — die oberste Stufe kommt sonst auf zu wenige Tage.
+    const last14 = NUTRITION.filter(r => r.day < todayStr).slice(-14);
     const cut = new Date(); cut.setDate(cut.getDate() - 30);
     const cutStr = bilanzIso(cut);
-    const umsatzOf = train => mean(WHOOP
-      .filter(w => w.day >= cutStr && w.day < todayStr && !w.cycle_open
-                && Number(w.kcal_out_whoop) > 1200
-                && isTrainDay(w.day) === train)
-      .map(w => Number(w.kcal_out_whoop)));
 
-    const fmt = v => Math.round(v).toLocaleString('de-DE');
-    const cell = (label, ist, band, farbe) => {
-      const inBand = ist !== null && ist >= band[0] && ist <= band[1];
-      const istTxt = ist === null ? '—' : fmt(ist);
-      return '<div style="flex:1; text-align:center;">'
-        + '<div style="font-size:0.55rem; letter-spacing:0.1em; color:' + farbe
-        + '; text-transform:uppercase;">' + label + '</div>'
-        + '<div style="font-size:0.95rem; font-weight:700; margin-top:2px; color:'
-        + (inBand ? COL_GOOD : '#c9c9d4') + ';">' + istTxt + '</div>'
-        + '<div style="font-size:0.6rem; color:' + COL_MUTED + '; margin-top:1px;">Ziel '
-        + fmt(band[0]) + '–' + fmt(band[1]) + '</div></div>';
-    };
+    const spalten = KCAL_STUFEN.map(st => {
+      const ist = mean(last14
+        .filter(r => Number(r.kcal_in) > 0 && stufeFor(strainOf(r.day)) === st)
+        .map(r => Number(r.kcal_in)));
+      const umsatz = mean(WHOOP
+        .filter(w => w.day >= cutStr && w.day < todayStr && !w.cycle_open
+                  && Number(w.kcal_out_whoop) > 1200
+                  && stufeFor(strainOf(w.day)) === st)
+        .map(w => Number(w.kcal_out_whoop)));
+      return { st, ist, umsatz };
+    });
 
-    let html = '<div style="display:flex; gap:8px;">'
-      + cell('Trainingstage', istOf(true),  KCAL_BAND.train, '#5bc8f5')
-      + cell('Ruhetage',      istOf(false), KCAL_BAND.rest,  COL_MUTED)
-      + '</div>';
+    let html = '<div style="display:flex; gap:6px;">';
+    spalten.forEach(({ st, ist }) => {
+      const inBand = ist !== null && ist >= st.band[0] && ist <= st.band[1];
+      html += '<div style="flex:1; text-align:center;">'
+        + '<div style="font-size:0.55rem; letter-spacing:0.08em; color:' + COL_TRAIN
+        + '; text-transform:uppercase;">Strain ' + st.kurz + '</div>'
+        + '<div style="font-size:0.9rem; font-weight:700; margin-top:2px; color:'
+        + (inBand ? COL_GOOD : '#c9c9d4') + ';">'
+        + (ist === null ? '—' : fmt(ist)) + '</div>'
+        + '<div style="font-size:0.55rem; color:' + COL_MUTED + '; margin-top:1px;">'
+        + fmt(st.band[0]) + '–' + fmt(st.band[1]) + '</div></div>';
+    });
+    html += '</div>';
 
-    // Driftwarnung: weicht der aus dem Umsatz abgeleitete Korridor um mehr
-    // als 100 kcal ab, gehoert er neu gerechnet. 100 ist bewusst traege —
-    // Tagesrauschen soll den Hinweis nicht staendig ausloesen.
+    // Selbstpruefung: weicht der aus dem gemessenen Umsatz abgeleitete
+    // Korridor um mehr als 150 kcal ab, gehoert die Stufe neu gerechnet.
+    // Ohne diesen Hinweis wuerden die einmal gesetzten Zahlen still veralten,
+    // wenn sich Gewicht, Trainingsdauer oder Jahreszeit aendern.
     const hinweise = [];
-    [['Trainingstage', umsatzOf(true), KCAL_BAND.train],
-     ['Ruhetage', umsatzOf(false), KCAL_BAND.rest]].forEach(([n, u, b]) => {
-      if (u === null) return;
-      const soll = u - DEFICIT;            // Untergrenze des neuen Korridors
-      if (Math.abs(soll - b[0]) > 100) {
-        hinweise.push(n + ': Umsatz Ø ' + fmt(u) + ' → Korridor eher '
-          + fmt(soll) + '–' + fmt(soll + 100));
+    spalten.forEach(({ st, umsatz }) => {
+      if (umsatz === null) return;
+      const soll = umsatz - DEFICIT;
+      if (Math.abs(soll - st.band[0]) > 150) {
+        hinweise.push('Strain ' + st.kurz + ': Umsatz Ø ' + fmt(umsatz)
+          + ' → eher ' + fmt(soll) + '–' + fmt(soll + 100));
       }
     });
     if (hinweise.length) {
@@ -2619,6 +2645,7 @@
     }
     box.innerHTML = html;
   }
+
 
   // Alle Daten neu holen und neu zeichnen — ohne Sync anzustossen.
   // Wird von Pull-to-Refresh und beim Zurueckkehren in die App benutzt.
