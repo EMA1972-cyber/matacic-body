@@ -1009,7 +1009,7 @@
   // ============================================================
   //  KONFIGURATION
   // ============================================================
-  const BUILD = '2026-09-20 13:00';   // bei jedem Deploy hochsetzen
+  const BUILD = '2026-09-20 13:20';   // bei jedem Deploy hochsetzen
   const SUPABASE_URL = 'https://atzcaxahulifnuvwxcpa.supabase.co';
 
   // ⬇⬇⬇  HIER DEINEN PUBLISHABLE KEY EINSETZEN  ⬇⬇⬇
@@ -2668,7 +2668,29 @@
       + '; margin-top:4px;">'
       + 'gegessen ' + fmt(gegessen) + ' · Umsatz bisher ' + fmt(bisher)
       + ' · Prognose ' + fmt(prognose) + ' (noch '
-      + rest_h.toFixed(1).replace('.', ',') + ' h × ' + KCAL_STD + ')</div>';
+      + rest_h.toFixed(1).replace('.', ',') + ' h × ' + KCAL_STD + ')</div>'
+
+    // Planwerte zum Nachschlagen am Morgen.
+    //
+    // Bewusst ohne Ist-Werte und ohne Ampel: Der Rechner darueber bewertet
+    // den laufenden Tag, diese Zeile beantwortet nur die Frage "was nehme
+    // ich mir heute vor?". Mit Ist-Werten daneben wuerde daraus wieder eine
+    // Bewertung der Vergangenheit — und die kann man nicht mehr essen.
+      + '<div style="margin-top:9px; padding-top:8px;'
+      + ' border-top:1px solid rgba(255,255,255,0.08);">'
+      + '<div style="font-size:0.55rem; letter-spacing:0.1em; color:' + COL_MUTED
+      + '; text-align:center; text-transform:uppercase; margin-bottom:5px;">'
+      + 'Planwerte nach erwartetem Strain</div>'
+      + '<div style="display:flex; gap:6px;">'
+      + KCAL_STUFEN.map(st =>
+          '<div style="flex:1; text-align:center;">'
+        + '<div style="font-size:0.62rem; color:' + COL_TRAIN + ';">'
+        + st.kurz + '</div>'
+        + '<div style="font-size:0.78rem; font-weight:700; color:#c9c9d4;'
+        + ' margin-top:2px;">' + fmt(st.band[0]) + '</div>'
+        + '<div style="font-size:0.62rem; color:' + COL_MUTED + ';">bis '
+        + fmt(st.band[1]) + '</div></div>').join('')
+      + '</div></div>';
   }
 
 
