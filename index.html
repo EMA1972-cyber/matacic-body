@@ -1009,7 +1009,7 @@
   // ============================================================
   //  KONFIGURATION
   // ============================================================
-  const BUILD = '2026-09-20 12:40';   // bei jedem Deploy hochsetzen
+  const BUILD = '2026-09-20 13:00';   // bei jedem Deploy hochsetzen
   const SUPABASE_URL = 'https://atzcaxahulifnuvwxcpa.supabase.co';
 
   // ⬇⬇⬇  HIER DEINEN PUBLISHABLE KEY EINSETZEN  ⬇⬇⬇
@@ -2492,14 +2492,11 @@
       const d = new Date(r.day + 'T12:00:00');
       const wd = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'][d.getDay()];
       const strain = Number((whoopByDay[r.day] || {}).day_strain);
-      const stFarbe = isFinite(strain) ? stufeFor(strain).farbe : COL_MUTED;
-      const isTrain = strain >= STRAIN_TRAIN;
-      ctx.fillStyle = isT ? COL_TODAY : stFarbe;
-      ctx.font = (isT || isTrain) ? 'bold 9px DM Mono, monospace'
-                                  : '9px DM Mono, monospace';
+      ctx.fillStyle = isT ? COL_TODAY : COL_MUTED;
+      ctx.font = isT ? 'bold 9px DM Mono, monospace'
+                     : '9px DM Mono, monospace';
       ctx.fillText(isT ? 'HEUTE' : wd, cx, 122);
       ctx.font = '8px DM Mono, monospace';
-      ctx.fillStyle = isT ? COL_TODAY : stFarbe;
       ctx.fillText(String(d.getDate()).padStart(2, '0') + '.'
                  + String(d.getMonth() + 1).padStart(2, '0'), cx, 132);
     });
@@ -2511,7 +2508,7 @@
       const cx = padX + slot * i + slot / 2;
       const st = Number((whoopByDay[r.day] || {}).day_strain);
       ctx.font = 'bold 8px DM Mono, monospace';
-      ctx.fillStyle = isFinite(st) ? stufeFor(st).farbe : COL_MUTED;
+      ctx.fillStyle = isFinite(st) ? COL_TRAIN : COL_MUTED;
       ctx.fillText(isFinite(st) ? st.toFixed(1).replace('.', ',') : '—', cx, 145);
     });
 
@@ -2640,11 +2637,11 @@
     const rest     = ziel - gegessen;
 
     const fmt = v => Math.round(v).toLocaleString('de-DE');
-    const farbe = isFinite(strain) ? stufeFor(strain).farbe : COL_MUTED;
+    const farbe = isFinite(strain) ? COL_TRAIN : COL_MUTED;
     // Ampel nur fuer die Restzahl: gruen wenn nahe null (±75 kcal),
     // gelb wenn noch etwas fehlt, rot wenn deutlich darueber.
-    const restFarbe = Math.abs(rest) <= 75 ? COL_GOOD
-                    : (rest > 0 ? COL_TODAY : '#f06060');
+    const delta = gegessen - ziel;          // + zu viel · − es fehlt noch
+    const deltaFarbe = delta > 0 ? '#f06060' : COL_GOOD;
 
     box.innerHTML =
         '<div style="display:flex; gap:8px; align-items:flex-end;">'
@@ -2656,9 +2653,9 @@
       + '</div>'
       + '<div style="flex:1; text-align:center;">'
       +   '<div style="font-size:0.5rem; letter-spacing:0.08em; color:' + COL_MUTED
-      +   '; text-transform:uppercase;">' + (rest >= 0 ? 'Noch offen' : 'Darüber') + '</div>'
-      +   '<div style="font-size:1.35rem; font-weight:700; color:' + restFarbe + ';">'
-      +   fmt(Math.abs(rest)) + '</div>'
+      +   '; text-transform:uppercase;">Delta</div>'
+      +   '<div style="font-size:1.35rem; font-weight:700; color:' + deltaFarbe + ';">'
+      +   (delta > 0 ? '+' : '−') + fmt(Math.abs(delta)) + '</div>'
       + '</div>'
       + '<div style="flex:1; text-align:center;">'
       +   '<div style="font-size:0.5rem; letter-spacing:0.08em; color:' + COL_MUTED
