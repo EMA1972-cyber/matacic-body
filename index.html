@@ -1009,7 +1009,7 @@
   // ============================================================
   //  KONFIGURATION
   // ============================================================
-  const BUILD = '2026-09-20 11:50';   // bei jedem Deploy hochsetzen
+  const BUILD = '2026-09-20 12:10';   // bei jedem Deploy hochsetzen
   const SUPABASE_URL = 'https://atzcaxahulifnuvwxcpa.supabase.co';
 
   // ⬇⬇⬇  HIER DEINEN PUBLISHABLE KEY EINSETZEN  ⬇⬇⬇
@@ -2584,81 +2584,83 @@
               whoopByDay, KCAL_STUFEN, stufeFor);
   }
 
-  // Ist/Ziel je Tagestyp ueber dem Bilanz-Diagramm.
+  // Tagesrechner ueber dem Bilanz-Diagramm.
   //
-  // Zweck: Die Korridore (KCAL_STUFEN) stammen aus gemessenen Whoop-Umsaetzen
-  // vom 20.09.2026. Umsaetze aendern sich aber — mit dem Gewicht, mit der
-  // Trainingsdauer, mit der Jahreszeit. Ohne Gegenprobe wuerde eine einmal
-  // gesetzte Zahl still veralten. Deshalb rechnet der Block die Korridore
-  // fortlaufend neu und meldet sich selbst, wenn sie abweichen — niemand
-  // muss daran denken.
+  // Warum kein Rueckblick mehr: Die vergangenen Tage kann man nicht mehr
+  // essen. Steuerbar ist nur der laufende Tag — und der aendert sich, sobald
+  // Belastung dazukommt. Der Block rechnet deshalb den Umsatz bis zum Ende
+  // des Whoop-Zyklus hoch und sagt, wie viel heute noch fehlt.
+  //
+  // Wichtig: Der Umsatz, den Whoop um die Mittagszeit zeigt, ist NICHT der
+  // Tagesumsatz. Bis zum Aufwachen kommen noch Stunden Grundumsatz dazu.
+  // Ohne Hochrechnung waere die Zahl morgens dramatisch zu niedrig.
   function drawBands(COL_GOOD, COL_MUTED, COL_TODAY, COL_TRAIN,
                      whoopByDay, KCAL_STUFEN, stufeFor) {
     const box = document.getElementById('bilanzBands');
     if (!box) return;
-    const DEFICIT = 500;              // Zieldefizit, auf dem die Korridore stehen
+
+    const DEFICIT   = 500;   // Zieldefizit
+    const KCAL_STD  = 80;    // Grundumsatz je Reststunde; aus den eigenen
+                             // Ruhetagen: 1.995 kcal / 24 h = 83
+    const WECKZEIT  = 6.5;   // ungefaehres Zyklusende (Aufwachen)
 
     const todayStr = bilanzIso(new Date());
-    const strainOf = day => Number((whoopByDay[day] || {}).day_strain);
-    const mean = a => a.length ? a.reduce((s, v) => s + v, 0) / a.length : null;
-    const fmt  = v => Math.round(v).toLocaleString('de-DE');
+    const w = whoopByDay[todayStr] || {};
+    const bisher  = Number(w.kcal_out_whoop);
+    const strain  = Number(w.day_strain);
+    const heute   = NUTRITION.find(r => r.day === todayStr) || {};
+    const gegessen = Number(heute.kcal_in) || 0;
 
-    // Ist: Aufnahme der letzten 14 abgeschlossenen Tage je Stufe. Bewusst 14
-    // statt 7 — die oberste Stufe kommt sonst auf zu wenige Tage.
-    const last14 = NUTRITION.filter(r => r.day < todayStr).slice(-14);
-    const cut = new Date(); cut.setDate(cut.getDate() - 30);
-    const cutStr = bilanzIso(cut);
-
-    const spalten = KCAL_STUFEN.map(st => {
-      const ist = mean(last14
-        .filter(r => Number(r.kcal_in) > 0 && stufeFor(strainOf(r.day)) === st)
-        .map(r => Number(r.kcal_in)));
-      const umsatz = mean(WHOOP
-        .filter(w => w.day >= cutStr && w.day < todayStr && !w.cycle_open
-                  && Number(w.kcal_out_whoop) > 1200
-                  && stufeFor(strainOf(w.day)) === st)
-        .map(w => Number(w.kcal_out_whoop)));
-      return { st, ist, umsatz };
-    });
-
-    let html = '<div style="font-size:0.5rem; letter-spacing:0.08em; color:'
-      + COL_MUTED + '; text-align:center; text-transform:uppercase;'
-      + ' margin-bottom:3px;">Strain-Stufe · Ø Aufnahme · Ziel</div>'
-      + '<div style="display:flex; gap:4px;">';
-    spalten.forEach(({ st, ist }) => {
-      const inBand = ist !== null && ist >= st.band[0] && ist <= st.band[1];
-      html += '<div style="flex:1; text-align:center;">'
-        + '<div style="font-size:0.5rem; letter-spacing:0.04em; color:' + st.farbe
-        + '; text-transform:uppercase;">' + st.kurz + '</div>'
-        + '<div style="font-size:0.85rem; font-weight:700; margin-top:2px; color:'
-        + (ist === null ? COL_MUTED : (inBand ? COL_GOOD : '#f06060')) + ';">'
-        + (ist === null ? '—' : fmt(ist)) + '</div>'
-        + '<div style="font-size:0.5rem; color:' + COL_MUTED + '; margin-top:1px;">'
-        + fmt(st.band[0]) + '–' + fmt(st.band[1]) + '</div></div>';
-    });
-    html += '</div>';
-
-    // Selbstpruefung: weicht der aus dem gemessenen Umsatz abgeleitete
-    // Korridor um mehr als 150 kcal ab, gehoert die Stufe neu gerechnet.
-    // Ohne diesen Hinweis wuerden die einmal gesetzten Zahlen still veralten,
-    // wenn sich Gewicht, Trainingsdauer oder Jahreszeit aendern.
-    const hinweise = [];
-    spalten.forEach(({ st, umsatz }) => {
-      if (umsatz === null) return;
-      const soll = umsatz - DEFICIT;
-      if (Math.abs(soll - st.band[0]) > 150) {
-        hinweise.push('Strain ' + st.kurz + ': Umsatz Ø ' + fmt(umsatz)
-          + ' → eher ' + fmt(soll) + '–' + fmt(soll + 100));
-      }
-    });
-    if (hinweise.length) {
-      html += '<div style="margin-top:8px; padding:6px 8px; border-radius:6px;'
-        + ' background:rgba(232,160,32,0.10); border:1px solid rgba(232,160,32,0.35);'
-        + ' font-size:0.6rem; line-height:1.5; color:' + COL_TODAY + ';">'
-        + 'Korridor prüfen — ' + hinweise.join(' · ') + '</div>';
+    if (!isFinite(bisher) || bisher <= 0) {
+      box.innerHTML = '<div style="text-align:center; font-size:0.65rem; color:'
+        + COL_MUTED + ';">Tagesrechner: warte auf Whoop-Daten</div>';
+      return;
     }
-    box.innerHTML = html;
+
+    // Reststunden bis zum Zyklusende
+    const now = new Date();
+    const std = now.getHours() + now.getMinutes() / 60;
+    const rest_h = Math.max(0, (std < WECKZEIT ? WECKZEIT : 24 + WECKZEIT) - std);
+
+    const prognose = Math.round(bisher + rest_h * KCAL_STD);
+    const ziel     = prognose - DEFICIT;
+    const rest     = ziel - gegessen;
+
+    const fmt = v => Math.round(v).toLocaleString('de-DE');
+    const farbe = isFinite(strain) ? stufeFor(strain).farbe : COL_MUTED;
+    // Ampel nur fuer die Restzahl: gruen wenn nahe null (±75 kcal),
+    // gelb wenn noch etwas fehlt, rot wenn deutlich darueber.
+    const restFarbe = Math.abs(rest) <= 75 ? COL_GOOD
+                    : (rest > 0 ? COL_TODAY : '#f06060');
+
+    box.innerHTML =
+        '<div style="display:flex; gap:8px; align-items:flex-end;">'
+      + '<div style="flex:1; text-align:center;">'
+      +   '<div style="font-size:0.5rem; letter-spacing:0.08em; color:' + COL_MUTED
+      +   '; text-transform:uppercase;">Ziel heute</div>'
+      +   '<div style="font-size:1.05rem; font-weight:700; color:#c9c9d4;">'
+      +   fmt(ziel) + '</div>'
+      + '</div>'
+      + '<div style="flex:1; text-align:center;">'
+      +   '<div style="font-size:0.5rem; letter-spacing:0.08em; color:' + COL_MUTED
+      +   '; text-transform:uppercase;">' + (rest >= 0 ? 'Noch offen' : 'Darüber') + '</div>'
+      +   '<div style="font-size:1.35rem; font-weight:700; color:' + restFarbe + ';">'
+      +   fmt(Math.abs(rest)) + '</div>'
+      + '</div>'
+      + '<div style="flex:1; text-align:center;">'
+      +   '<div style="font-size:0.5rem; letter-spacing:0.08em; color:' + COL_MUTED
+      +   '; text-transform:uppercase;">Strain jetzt</div>'
+      +   '<div style="font-size:1.05rem; font-weight:700; color:' + farbe + ';">'
+      +   (isFinite(strain) ? strain.toFixed(1).replace('.', ',') : '—') + '</div>'
+      + '</div>'
+      + '</div>'
+      + '<div style="text-align:center; font-size:0.55rem; color:' + COL_MUTED
+      + '; margin-top:4px;">'
+      + 'gegessen ' + fmt(gegessen) + ' · Umsatz bisher ' + fmt(bisher)
+      + ' · Prognose ' + fmt(prognose) + ' (+' + rest_h.toFixed(1).replace('.', ',')
+      + ' h × ' + KCAL_STD + ')</div>';
   }
+
 
 
   // Alle Daten neu holen und neu zeichnen — ohne Sync anzustossen.
