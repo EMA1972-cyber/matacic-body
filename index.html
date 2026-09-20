@@ -1009,7 +1009,7 @@
   // ============================================================
   //  KONFIGURATION
   // ============================================================
-  const BUILD = '2026-09-20 13:20';   // bei jedem Deploy hochsetzen
+  const BUILD = '2026-09-20 19:25';   // bei jedem Deploy hochsetzen
   const SUPABASE_URL = 'https://atzcaxahulifnuvwxcpa.supabase.co';
 
   // ⬇⬇⬇  HIER DEINEN PUBLISHABLE KEY EINSETZEN  ⬇⬇⬇
@@ -2666,8 +2666,10 @@
       + '</div>'
       + '<div style="text-align:center; font-size:0.55rem; color:' + COL_MUTED
       + '; margin-top:4px;">'
-      + 'gegessen ' + fmt(gegessen) + ' · Umsatz bisher ' + fmt(bisher)
-      + ' · Prognose ' + fmt(prognose) + ' (noch '
+      + 'gegessen ' + fmt(gegessen) + ' · Umsatz bisher ' + fmt(bisher) + '</div>'
+      + '<div style="text-align:center; font-size:0.55rem; color:' + COL_MUTED
+      + '; margin-top:2px;">'
+      + 'Prognose ' + fmt(prognose) + ' (noch '
       + rest_h.toFixed(1).replace('.', ',') + ' h × ' + KCAL_STD + ')</div>'
 
     // Planwerte zum Nachschlagen am Morgen.
