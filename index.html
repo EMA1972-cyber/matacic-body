@@ -228,6 +228,12 @@
     color: #4a4a5a;
     text-transform: uppercase;
   }
+  .lm-ext {
+    font-size: 0.6rem;
+    line-height: 1.45;
+    margin-top: 3px;
+    letter-spacing: 0.04em;
+  }
   .lm-pct {
     font-size: 0.75rem;
     color: var(--muted);
@@ -829,6 +835,7 @@
       <div class="lm-val" id="c-visc">—</div>
       <div class="lm-unit">INDEX</div>
       <div class="lm-pct" id="c-visc-note">&nbsp;</div>
+      <div class="lm-ext" id="c-visc-ext"></div>
     </div>
     <div class="lm-item">
       <div class="lm-lbl">BMI</div>
@@ -841,6 +848,7 @@
       <div class="lm-val" id="c-pwv">—</div>
       <div class="lm-unit">M/S</div>
       <div class="lm-pct" id="c-pwv-note">&nbsp;</div>
+      <div class="lm-ext" id="c-pwv-ext"></div>
     </div>
   </div>
 </div>
@@ -1000,7 +1008,7 @@
   // ============================================================
   //  KONFIGURATION
   // ============================================================
-  const BUILD = '2026-09-19 17:40';   // bei jedem Deploy hochsetzen
+  const BUILD = '2026-09-20 09:15';   // bei jedem Deploy hochsetzen
   const SUPABASE_URL = 'https://atzcaxahulifnuvwxcpa.supabase.co';
 
   // ⬇⬇⬇  HIER DEINEN PUBLISHABLE KEY EINSETZEN  ⬇⬇⬇
@@ -1181,7 +1189,7 @@
     if (viscEl) {
       const v = latest.visceral;
       if (v === null) { viscEl.textContent = '—'; }
-      else { viscEl.textContent = v.toFixed(1).replace('.', ','); viscEl.style.color = deltaColor(v, prev ? prev.visceral : null, true); }
+      else { viscEl.textContent = v.toFixed(2).replace('.', ','); viscEl.style.color = deltaColor(v, prev ? prev.visceral : null, true); }
     }
 
     // BMI
@@ -1211,11 +1219,39 @@
       const lastPwv = pwvEntries[0];
       const prevPwv = pwvEntries[1] ?? null;
       if (lastPwv) {
-        pwvEl.textContent = lastPwv.pwv.toFixed(1).replace('.', ',');
+        pwvEl.textContent = lastPwv.pwv.toFixed(2).replace('.', ',');
         pwvEl.style.color = deltaColor(lastPwv.pwv, prevPwv ? prevPwv.pwv : null, true);
         if (pwvNote) pwvNote.textContent = lastPwv.date !== latest.date ? fmtDate(lastPwv.date) : '';
       } else { pwvEl.textContent = '—'; }
     }
+
+    // MIN / MAX fuer Viszeral und PWG
+    //
+    // Beide Werte stammen aus derselben Bioimpedanzmessung wie Muskel und
+    // Wasser und rauschen entsprechend. Als Tageswert taugen sie wenig, als
+    // Spanne ueber Monate schon — deshalb stehen Bestwert und schlechtester
+    // Wert klein unter dem aktuellen.
+    //
+    // Der 16.09.2026 ist eine nachweisliche Fehlmessung (9,83 % Fett,
+    // 81,8 kg Muskel bei 93,3 kg Gewicht — physiologisch unmoeglich) und
+    // wird hier ausgeschlossen, sonst waere er faelschlich der Bestwert.
+    const MESS_FEHLER = ['2026-09-16'];
+
+    function setExtrema(elId, werte) {
+      const el = document.getElementById(elId);
+      if (!el) return;
+      const vals = werte.filter(v => v !== null && isFinite(v));
+      if (!vals.length) { el.innerHTML = ''; return; }
+      const f = v => v.toFixed(2).replace('.', ',');
+      el.innerHTML =
+          '<div style="color:#60f0a0;">MIN ' + f(Math.min.apply(null, vals)) + '</div>'
+        + '<div style="color:#f06060;">MAX ' + f(Math.max.apply(null, vals)) + '</div>';
+    }
+
+    const sauber = DATA.filter(r => r.date >= START_DATE
+                                 && !MESS_FEHLER.includes(r.date));
+    setExtrema('c-visc-ext', sauber.map(r => r.visceral));
+    setExtrema('c-pwv-ext',  sauber.map(r => r.pwv));
 
     // MAX / MIN / AVG Gewicht seit Start
     const weightsSinceStart = data
