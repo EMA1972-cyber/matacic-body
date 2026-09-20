@@ -1009,7 +1009,7 @@
   // ============================================================
   //  KONFIGURATION
   // ============================================================
-  const BUILD = '2026-09-20 12:10';   // bei jedem Deploy hochsetzen
+  const BUILD = '2026-09-20 12:30';   // bei jedem Deploy hochsetzen
   const SUPABASE_URL = 'https://atzcaxahulifnuvwxcpa.supabase.co';
 
   // ⬇⬇⬇  HIER DEINEN PUBLISHABLE KEY EINSETZEN  ⬇⬇⬇
@@ -2591,9 +2591,15 @@
   // Belastung dazukommt. Der Block rechnet deshalb den Umsatz bis zum Ende
   // des Whoop-Zyklus hoch und sagt, wie viel heute noch fehlt.
   //
-  // Wichtig: Der Umsatz, den Whoop um die Mittagszeit zeigt, ist NICHT der
-  // Tagesumsatz. Bis zum Aufwachen kommen noch Stunden Grundumsatz dazu.
-  // Ohne Hochrechnung waere die Zahl morgens dramatisch zu niedrig.
+  // Wichtig: Der Umsatz, den Whoop unterwegs zeigt, ist NICHT der
+  // Tagesumsatz — es fehlen die Reststunden bis zum Zyklusende.
+  //
+  // Noch wichtiger: Ein Whoop-Zyklus laeuft NICHT von morgens bis morgens,
+  // sondern vom Zubettgehen bis zum naechsten Zubettgehen (Beleg 20.09.:
+  // cycle_start 19.09. 21:23 Uhr). Um 11:15 waren deshalb bereits 14 von 24
+  // Stunden gelaufen und nur noch 10 offen. Eine erste Fassung rechnete
+  // stur bis 6:30 morgens hoch und kam dadurch auf ein rund 300 kcal zu
+  // hohes Ziel. Deshalb wird hier der echte cycle_start verwendet.
   function drawBands(COL_GOOD, COL_MUTED, COL_TODAY, COL_TRAIN,
                      whoopByDay, KCAL_STUFEN, stufeFor) {
     const box = document.getElementById('bilanzBands');
@@ -2602,7 +2608,7 @@
     const DEFICIT   = 500;   // Zieldefizit
     const KCAL_STD  = 80;    // Grundumsatz je Reststunde; aus den eigenen
                              // Ruhetagen: 1.995 kcal / 24 h = 83
-    const WECKZEIT  = 6.5;   // ungefaehres Zyklusende (Aufwachen)
+    const ZYKLUS_H  = 24;    // Laenge eines Whoop-Zyklus
 
     const todayStr = bilanzIso(new Date());
     const w = whoopByDay[todayStr] || {};
@@ -2617,10 +2623,17 @@
       return;
     }
 
-    // Reststunden bis zum Zyklusende
-    const now = new Date();
-    const std = now.getHours() + now.getMinutes() / 60;
-    const rest_h = Math.max(0, (std < WECKZEIT ? WECKZEIT : 24 + WECKZEIT) - std);
+    // Reststunden bis zum Zyklusende. Ohne cycle_start faellt der Block auf
+    // eine grobe Annahme zurueck, statt eine falsche Zahl zu behaupten.
+    const start = w.cycle_start ? new Date(w.cycle_start) : null;
+    const gelaufen_h = start ? (Date.now() - start.getTime()) / 3600000 : null;
+    const rest_h = gelaufen_h === null ? null
+                 : Math.max(0, ZYKLUS_H - gelaufen_h);
+    if (rest_h === null) {
+      box.innerHTML = '<div style="text-align:center; font-size:0.65rem; color:'
+        + COL_MUTED + ';">Tagesrechner: Zyklusstart fehlt</div>';
+      return;
+    }
 
     const prognose = Math.round(bisher + rest_h * KCAL_STD);
     const ziel     = prognose - DEFICIT;
@@ -2657,8 +2670,8 @@
       + '<div style="text-align:center; font-size:0.55rem; color:' + COL_MUTED
       + '; margin-top:4px;">'
       + 'gegessen ' + fmt(gegessen) + ' · Umsatz bisher ' + fmt(bisher)
-      + ' · Prognose ' + fmt(prognose) + ' (+' + rest_h.toFixed(1).replace('.', ',')
-      + ' h × ' + KCAL_STD + ')</div>';
+      + ' · Prognose ' + fmt(prognose) + ' (noch '
+      + rest_h.toFixed(1).replace('.', ',') + ' h × ' + KCAL_STD + ')</div>';
   }
 
 
