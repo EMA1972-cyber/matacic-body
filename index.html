@@ -1009,7 +1009,7 @@
   // ============================================================
   //  KONFIGURATION
   // ============================================================
-  const BUILD = '2026-09-20 10:20';   // bei jedem Deploy hochsetzen
+  const BUILD = '2026-09-20 10:55';   // bei jedem Deploy hochsetzen
   const SUPABASE_URL = 'https://atzcaxahulifnuvwxcpa.supabase.co';
 
   // ⬇⬇⬇  HIER DEINEN PUBLISHABLE KEY EINSETZEN  ⬇⬇⬇
@@ -2310,20 +2310,32 @@
     // gemessenen Whoop-Umsaetzen (30 Tage, 20.09.2026): Tage mit Strain
     // >= 10 liegen im Mittel bei 2.418 kcal, darunter bei 1.976. Ein
     // Defizit von ~500 trifft damit 1.800-1.900 bzw. 1.400-1.500.
-    // Drei Stufen, hergeleitet aus den gemessenen Whoop-Umsaetzen
+    // Vier Stufen, hergeleitet aus den gemessenen Whoop-Umsaetzen
     // (01.08.-20.09.2026, jeweils Umsatz minus ~500 kcal Zieldefizit):
-    //   Strain < 10  → Ø 1.960 kcal  (Buerotag, Spaziergang, Ruhetag)
-    //   Strain 10-14 → Ø 2.166 kcal  (normales Gym, kurze Radrunde)
-    //   Strain >= 14 → Ø 3.131 kcal  (harte Einheit, lange Tour)
+    //   Strain < 10  → Ø 1.960   Buerotag, Spaziergang, Ruhetag
+    //   Strain 10-14 → Ø 2.170   normales Gym, kurze Radrunde
+    //   Strain 14-17 → Ø 2.450   harte Gym-Einheit
+    //   Strain >= 17 → Ø 3.400   lange Tour
     //
-    // Bewusst DREI und nicht vier Stufen: Tage unter 6 und Tage zwischen
-    // 6 und 10 kosten praktisch identisch viel (1.965 vs. 1.957). Eine
-    // zusaetzliche Grenze haette eine Genauigkeit vorgetaeuscht, die die
-    // Daten nicht hergeben. Spaziergaenge erzeugen Strain, aber kaum Umsatz.
+    // Warum nicht linear: Strain ist eine Herzfrequenz-Skala, kein
+    // Verbrauchsmass. Krafttraining erzeugt ueber kurze Spitzen viel Strain
+    // bei wenig Umsatz, eine dreistuendige Tour ueber die reine Dauer. Ab 15
+    // sind es fast nur noch lange Touren — deshalb reisst die Kurve dort aus
+    // und braucht eine eigene Stufe. Eine einzige Stufe "ab 14" hatte den
+    // 19.09. (Strain 14,6 / Umsatz 2.453) um rund 700 kcal ueberschaetzt,
+    // weil die Touren mit 18 und 19 den Mittelwert nach oben zogen.
+    //
+    // Tage unter 6 und Tage zwischen 6 und 10 kosten dagegen praktisch
+    // identisch viel (1.965 vs. 1.957) und bleiben deshalb eine Stufe.
+    //
+    // Vorsicht bei den oberen beiden Stufen: sie stuetzen sich auf zwei bzw.
+    // drei Tage. Bei langen Touren nicht nach Plan essen, sondern nach der
+    // Runde den gemessenen Umsatz ablesen und auffuellen.
     const KCAL_STUFEN = [
       { bis: 10,       band: [1450, 1550], kurz: 'bis 10' },
       { bis: 14,       band: [1650, 1750], kurz: '10–14'  },
-      { bis: Infinity, band: [2400, 2600], kurz: 'ab 14'  }
+      { bis: 17,       band: [1950, 2150], kurz: '14–17'  },
+      { bis: Infinity, band: [2600, 2900], kurz: 'ab 17'  }
     ];
     const stufeFor = st => KCAL_STUFEN.find(x => !(st >= x.bis)) || KCAL_STUFEN[0];
     const padX = 8;
@@ -2610,16 +2622,19 @@
       return { st, ist, umsatz };
     });
 
-    let html = '<div style="display:flex; gap:6px;">';
+    let html = '<div style="font-size:0.5rem; letter-spacing:0.08em; color:'
+      + COL_MUTED + '; text-align:center; text-transform:uppercase;'
+      + ' margin-bottom:3px;">Strain-Stufe · Ø Aufnahme · Ziel</div>'
+      + '<div style="display:flex; gap:4px;">';
     spalten.forEach(({ st, ist }) => {
       const inBand = ist !== null && ist >= st.band[0] && ist <= st.band[1];
       html += '<div style="flex:1; text-align:center;">'
-        + '<div style="font-size:0.55rem; letter-spacing:0.08em; color:' + COL_TRAIN
-        + '; text-transform:uppercase;">Strain ' + st.kurz + '</div>'
-        + '<div style="font-size:0.9rem; font-weight:700; margin-top:2px; color:'
+        + '<div style="font-size:0.5rem; letter-spacing:0.04em; color:' + COL_TRAIN
+        + '; text-transform:uppercase;">' + st.kurz + '</div>'
+        + '<div style="font-size:0.85rem; font-weight:700; margin-top:2px; color:'
         + (inBand ? COL_GOOD : '#c9c9d4') + ';">'
         + (ist === null ? '—' : fmt(ist)) + '</div>'
-        + '<div style="font-size:0.55rem; color:' + COL_MUTED + '; margin-top:1px;">'
+        + '<div style="font-size:0.5rem; color:' + COL_MUTED + '; margin-top:1px;">'
         + fmt(st.band[0]) + '–' + fmt(st.band[1]) + '</div></div>';
     });
     html += '</div>';
