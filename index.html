@@ -1009,7 +1009,7 @@
   // ============================================================
   //  KONFIGURATION
   // ============================================================
-  const BUILD = '2026-09-20 11:20';   // bei jedem Deploy hochsetzen
+  const BUILD = '2026-09-20 11:35';   // bei jedem Deploy hochsetzen
   const SUPABASE_URL = 'https://atzcaxahulifnuvwxcpa.supabase.co';
 
   // ⬇⬇⬇  HIER DEINEN PUBLISHABLE KEY EINSETZEN  ⬇⬇⬇
@@ -2332,10 +2332,10 @@
     // drei Tage. Bei langen Touren nicht nach Plan essen, sondern nach der
     // Runde den gemessenen Umsatz ablesen und auffuellen.
     const KCAL_STUFEN = [
-      { bis: 10,       band: [1450, 1550], kurz: 'bis 10', farbe: '#8a93a6' },
+      { bis: 10,       band: [1450, 1550], kurz: 'bis 10', farbe: '#f0d24a' },
       { bis: 14,       band: [1650, 1750], kurz: '10–14',  farbe: '#5bc8f5' },
-      { bis: 17,       band: [1950, 2150], kurz: '14–17',  farbe: '#9d8cf5' },
-      { bis: Infinity, band: [2600, 2900], kurz: 'ab 17',  farbe: '#e06fd0' }
+      { bis: 17,       band: [1950, 2150], kurz: '14–17',  farbe: '#e06fd0' },
+      { bis: Infinity, band: [2600, 2900], kurz: 'ab 17',  farbe: '#8b5cf6' }
     ];
     const stufeFor = st => KCAL_STUFEN.find(x => !(st >= x.bis)) || KCAL_STUFEN[0];
     const padX = 8;
