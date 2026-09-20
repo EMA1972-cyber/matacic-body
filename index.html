@@ -230,6 +230,7 @@
   }
   .lm-ext {
     font-size: 0.6rem;
+    min-height: 1.75em;
     line-height: 1.45;
     margin-top: 3px;
     letter-spacing: 0.04em;
@@ -1008,7 +1009,7 @@
   // ============================================================
   //  KONFIGURATION
   // ============================================================
-  const BUILD = '2026-09-20 09:15';   // bei jedem Deploy hochsetzen
+  const BUILD = '2026-09-20 09:35';   // bei jedem Deploy hochsetzen
   const SUPABASE_URL = 'https://atzcaxahulifnuvwxcpa.supabase.co';
 
   // ⬇⬇⬇  HIER DEINEN PUBLISHABLE KEY EINSETZEN  ⬇⬇⬇
@@ -1221,7 +1222,8 @@
       if (lastPwv) {
         pwvEl.textContent = lastPwv.pwv.toFixed(2).replace('.', ',');
         pwvEl.style.color = deltaColor(lastPwv.pwv, prevPwv ? prevPwv.pwv : null, true);
-        if (pwvNote) pwvNote.textContent = lastPwv.date !== latest.date ? fmtDate(lastPwv.date) : '';
+        if (pwvNote) pwvNote.textContent = lastPwv.date !== latest.date
+                                          ? fmtDate(lastPwv.date) : '\u00a0';
       } else { pwvEl.textContent = '—'; }
     }
 
