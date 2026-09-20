@@ -1009,7 +1009,7 @@
   // ============================================================
   //  KONFIGURATION
   // ============================================================
-  const BUILD = '2026-09-20 10:55';   // bei jedem Deploy hochsetzen
+  const BUILD = '2026-09-20 11:20';   // bei jedem Deploy hochsetzen
   const SUPABASE_URL = 'https://atzcaxahulifnuvwxcpa.supabase.co';
 
   // ⬇⬇⬇  HIER DEINEN PUBLISHABLE KEY EINSETZEN  ⬇⬇⬇
@@ -2332,10 +2332,10 @@
     // drei Tage. Bei langen Touren nicht nach Plan essen, sondern nach der
     // Runde den gemessenen Umsatz ablesen und auffuellen.
     const KCAL_STUFEN = [
-      { bis: 10,       band: [1450, 1550], kurz: 'bis 10' },
-      { bis: 14,       band: [1650, 1750], kurz: '10–14'  },
-      { bis: 17,       band: [1950, 2150], kurz: '14–17'  },
-      { bis: Infinity, band: [2600, 2900], kurz: 'ab 17'  }
+      { bis: 10,       band: [1450, 1550], kurz: 'bis 10', farbe: '#8a93a6' },
+      { bis: 14,       band: [1650, 1750], kurz: '10–14',  farbe: '#5bc8f5' },
+      { bis: 17,       band: [1950, 2150], kurz: '14–17',  farbe: '#9d8cf5' },
+      { bis: Infinity, band: [2600, 2900], kurz: 'ab 17',  farbe: '#e06fd0' }
     ];
     const stufeFor = st => KCAL_STUFEN.find(x => !(st >= x.bis)) || KCAL_STUFEN[0];
     const padX = 8;
@@ -2492,15 +2492,14 @@
       const d = new Date(r.day + 'T12:00:00');
       const wd = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'][d.getDay()];
       const strain = Number((whoopByDay[r.day] || {}).day_strain);
+      const stFarbe = isFinite(strain) ? stufeFor(strain).farbe : COL_MUTED;
       const isTrain = strain >= STRAIN_TRAIN;
-      ctx.fillStyle = isT ? COL_TODAY : (isTrain ? COL_TRAIN : COL_MUTED);
+      ctx.fillStyle = isT ? COL_TODAY : stFarbe;
       ctx.font = (isT || isTrain) ? 'bold 9px DM Mono, monospace'
                                   : '9px DM Mono, monospace';
       ctx.fillText(isT ? 'HEUTE' : wd, cx, 122);
       ctx.font = '8px DM Mono, monospace';
-      // Datum bleibt auch am laufenden Tag blau, wenn schon trainiert wurde —
-      // die Frage "war heute Belastung?" ist dann bereits beantwortet.
-      if (isTrain) ctx.fillStyle = COL_TRAIN;
+      ctx.fillStyle = isT ? COL_TODAY : stFarbe;
       ctx.fillText(String(d.getDate()).padStart(2, '0') + '.'
                  + String(d.getMonth() + 1).padStart(2, '0'), cx, 132);
     });
@@ -2511,8 +2510,8 @@
     rows.forEach((r, i) => {
       const cx = padX + slot * i + slot / 2;
       const st = Number((whoopByDay[r.day] || {}).day_strain);
-      ctx.font = '8px DM Mono, monospace';
-      ctx.fillStyle = isFinite(st) && st >= STRAIN_TRAIN ? COL_TRAIN : COL_MUTED;
+      ctx.font = 'bold 8px DM Mono, monospace';
+      ctx.fillStyle = isFinite(st) ? stufeFor(st).farbe : COL_MUTED;
       ctx.fillText(isFinite(st) ? st.toFixed(1).replace('.', ',') : '—', cx, 145);
     });
 
@@ -2629,7 +2628,7 @@
     spalten.forEach(({ st, ist }) => {
       const inBand = ist !== null && ist >= st.band[0] && ist <= st.band[1];
       html += '<div style="flex:1; text-align:center;">'
-        + '<div style="font-size:0.5rem; letter-spacing:0.04em; color:' + COL_TRAIN
+        + '<div style="font-size:0.5rem; letter-spacing:0.04em; color:' + st.farbe
         + '; text-transform:uppercase;">' + st.kurz + '</div>'
         + '<div style="font-size:0.85rem; font-weight:700; margin-top:2px; color:'
         + (inBand ? COL_GOOD : '#c9c9d4') + ';">'
