@@ -1014,7 +1014,7 @@
   // ============================================================
   //  KONFIGURATION
   // ============================================================
-  const BUILD = '2026-09-29 21:10';   // bei jedem Deploy hochsetzen
+  const BUILD = '2026-09-29 21:25';   // bei jedem Deploy hochsetzen
   const SUPABASE_URL = 'https://atzcaxahulifnuvwxcpa.supabase.co';
 
   // ⬇⬇⬇  HIER DEINEN PUBLISHABLE KEY EINSETZEN  ⬇⬇⬇
@@ -1395,11 +1395,21 @@
   // CHART
   let activeChart = 'w';
   let trendWindowDays = 30; // 30/60/90 — waehlbar ueber die Trend-Tabs
+  // Farbklasse der Trend-Tabs folgt der gerade aktiven Metrik (Gewicht/
+  // Muskel/Fett), damit 30T/60T/90T optisch erkennbar zur GEWICHT/MUSKEL/
+  // FETT-Auswahl gehoeren statt immer gelb-gruen zu sein.
+  function activeColorClass() {
+    return activeChart === 'w' ? 'active-w' : activeChart === 'm' ? 'active-m' : 'active-a';
+  }
+  function paintTrendTabs() {
+    const cls = activeColorClass();
+    document.querySelectorAll('#trendWindowTabs .chart-tab').forEach(el => {
+      el.className = 'chart-tab' + (Number(el.dataset.win) === trendWindowDays ? ' ' + cls : '');
+    });
+  }
   function setTrendWindow(days) {
     trendWindowDays = days;
-    document.querySelectorAll('#trendWindowTabs .chart-tab').forEach(el => {
-      el.classList.toggle('active-w', Number(el.dataset.win) === days);
-    });
+    paintTrendTabs();
     drawChart();
   }
 
@@ -1413,6 +1423,7 @@
     if (type === 'w') tabs[0].className = 'chart-tab active-w';
     if (type === 'm') tabs[1].className = 'chart-tab active-m';
     if (type === 'a') tabs[2].className = 'chart-tab active-a';
+    paintTrendTabs();
     drawChart();
   }
 
