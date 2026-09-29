@@ -933,6 +933,11 @@
     <div class="chart-tab" onclick="setChart('m')">MUSKEL</div>
     <div class="chart-tab" onclick="setChart('a')">FETT</div>
   </div>
+  <div class="chart-tabs" id="trendWindowTabs" style="margin-top:-4px; margin-bottom:6px;">
+    <div class="chart-tab active-w" data-win="30" onclick="setTrendWindow(30)" style="font-size:0.62rem; padding:5px 0;">30T</div>
+    <div class="chart-tab" data-win="60" onclick="setTrendWindow(60)" style="font-size:0.62rem; padding:5px 0;">60T</div>
+    <div class="chart-tab" data-win="90" onclick="setTrendWindow(90)" style="font-size:0.62rem; padding:5px 0;">90T</div>
+  </div>
   <div id="chartToggleHint" onclick="toggleChartExpand()" style="text-align:center; font-size:0.55rem; font-family:'DM Mono',monospace; letter-spacing:0.1em; text-transform:uppercase; color:var(--muted); margin-bottom:8px; cursor:pointer; user-select:none;">▼ Alle anzeigen</div>
   <canvas id="myChart"></canvas>
   <div class="chart-tooltip" id="chartTooltip"><div class="tt-date" id="tt-date"></div><div class="tt-val" id="tt-val"></div></div>
@@ -1009,7 +1014,7 @@
   // ============================================================
   //  KONFIGURATION
   // ============================================================
-  const BUILD = '2026-09-20 19:25';   // bei jedem Deploy hochsetzen
+  const BUILD = '2026-09-29 16:30';   // bei jedem Deploy hochsetzen
   const SUPABASE_URL = 'https://atzcaxahulifnuvwxcpa.supabase.co';
 
   // ⬇⬇⬇  HIER DEINEN PUBLISHABLE KEY EINSETZEN  ⬇⬇⬇
@@ -1389,6 +1394,14 @@
 
   // CHART
   let activeChart = 'w';
+  let trendWindowDays = 30; // 30/60/90 — waehlbar ueber die Trend-Tabs
+  function setTrendWindow(days) {
+    trendWindowDays = days;
+    document.querySelectorAll('#trendWindowTabs .chart-tab').forEach(el => {
+      el.classList.toggle('active-w', Number(el.dataset.win) === days);
+    });
+    drawChart();
+  }
 
   function setChart(type) {
     activeChart = type;
@@ -1530,7 +1543,7 @@
 
     // ---- 30-Tage-Trendlinie (lineare Regression) ----
     const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - 30);
+    cutoff.setDate(cutoff.getDate() - trendWindowDays);
     const cutoffStr = cutoff.toISOString().slice(0, 10);
     const trendData = validData
       .map((r, i) => ({ i, v: validVals[i], date: r.date }))
@@ -1572,7 +1585,7 @@
       ctx.fillStyle = trendColor;
       ctx.font = 'bold 10px DM Mono, monospace';
       ctx.textAlign = 'center';
-      ctx.fillText('Trend 30T: ' + trendLabel, W / 2, 12);
+      ctx.fillText('Trend ' + trendWindowDays + 'T: ' + trendLabel, W / 2, 12);
       ctx.restore();
     }
 
