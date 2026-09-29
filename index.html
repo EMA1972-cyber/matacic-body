@@ -928,7 +928,7 @@
 <!-- CHARTS -->
 <div class="chart-wrap">
   <div class="chart-title">Verlauf</div>
-  <div class="chart-tabs">
+  <div class="chart-tabs" id="metricTabs">
     <div class="chart-tab active-w" onclick="setChart('w')">GEWICHT</div>
     <div class="chart-tab" onclick="setChart('m')">MUSKEL</div>
     <div class="chart-tab" onclick="setChart('a')">FETT</div>
@@ -1014,7 +1014,7 @@
   // ============================================================
   //  KONFIGURATION
   // ============================================================
-  const BUILD = '2026-09-29 16:30';   // bei jedem Deploy hochsetzen
+  const BUILD = '2026-09-29 21:10';   // bei jedem Deploy hochsetzen
   const SUPABASE_URL = 'https://atzcaxahulifnuvwxcpa.supabase.co';
 
   // ⬇⬇⬇  HIER DEINEN PUBLISHABLE KEY EINSETZEN  ⬇⬇⬇
@@ -1405,7 +1405,10 @@
 
   function setChart(type) {
     activeChart = type;
-    const tabs = document.querySelectorAll('.chart-tab');
+    // Nur die Metrik-Tabs (GEWICHT/MUSKEL/FETT) zuruecksetzen — sonst wird
+    // hier versehentlich auch die Markierung der 30T/60T/90T-Tabs entfernt,
+    // weil beide Gruppen dieselbe CSS-Klasse "chart-tab" teilen.
+    const tabs = document.querySelectorAll('#metricTabs .chart-tab');
     tabs.forEach(t => t.className = 'chart-tab');
     if (type === 'w') tabs[0].className = 'chart-tab active-w';
     if (type === 'm') tabs[1].className = 'chart-tab active-m';
@@ -1429,7 +1432,7 @@
     if (!START || !DATA.length) return;
     let allData = DATA.slice().sort((a,b) => a.date.localeCompare(b.date)).filter(r => r.date >= START.date);
     // Default: last 7, with every other point shown (max 7 visible)
-    const data = chartExpanded ? allData : allData.slice(-30);
+    const data = chartExpanded ? allData : allData.slice(-trendWindowDays);
     if (data.length < 2) return;
 
     const dpr = window.devicePixelRatio || 1;
